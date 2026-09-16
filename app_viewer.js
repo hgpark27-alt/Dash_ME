@@ -2,12 +2,12 @@
 (function(){
 "use strict";
 
-var COLOR = { blue:"#1e3a5f", orange:"#c2612d", aqua:"#1baf7a", yellow:"#c98a1f",
-  magenta:"#b5567a", green:"#0f7a3d", violet:"#4a3aa7", red:"#b91c1c",
-  ink:"#0f172a", ink2:"#475569", muted:"#64748b", grid:"#e2e8f0", axis:"#cbd5e1" };
+var COLOR = { blue:"#3b6fe0", orange:"#14b8a6", aqua:"#14b8a6", yellow:"#f0b429",
+  magenta:"#a855c9", green:"#10b981", violet:"#6d5ce8", red:"#e0526b",
+  ink:"#1c2333", ink2:"#5b6478", muted:"#8890a3", grid:"#edeef7", axis:"#dcdfef" };
 
-var BU_PALETTE_ORDER = [COLOR.blue,COLOR.orange,COLOR.aqua,COLOR.yellow,COLOR.magenta,COLOR.green,COLOR.violet,COLOR.red];
-var OTHER_GREY = "#94a3b8";
+var BU_PALETTE_ORDER = [COLOR.blue,COLOR.violet,COLOR.orange,COLOR.magenta,COLOR.yellow,COLOR.green,COLOR.red,"#4c5fd5"];
+var OTHER_GREY = "#a8afc0";
 
 /* 색상 보정: hex를 흰색/검정과 섞어 밝게/어둡게 만든다 (그라디언트·글로우용) */
 function mix(hex, targetHex, amt){
@@ -22,12 +22,9 @@ function darken(hex, amt){ return mix(hex, "#000000", amt); }
 var svgDefsUid = 0;
 
 var DIVISION_HUES = {
-  "TKM": { dark: COLOR.blue, light: "#93b3d6" },
-  "NEW": { dark: COLOR.orange, light: "#e3ab84" }
+  "TKM": { dark: COLOR.blue, light: lighten(COLOR.blue,0.45) },
+  "NEW": { dark: COLOR.orange, light: lighten(COLOR.orange,0.45) }
 };
-function getDivisionHue(div){
-  return DIVISION_HUES[div] || { dark: COLOR.violet, light: "#c9c0ec" };
-}
 
 var ALL_ROWS = [];
 var MONTH_KEYS = []; // 임베드된 데이터 전체의 monthKey, 오름차순 정렬 (예: "2025-01")
@@ -452,25 +449,34 @@ function opRateOf(rows){
 
 function renderKPI(rows, divisions, periodLabel){
   var box = document.getElementById("kpiRow");
-  var tiles = [];
-  divisions.forEach(function(d){
+  function tileHtml(t){
+    var valueText = formatKRW(t.value) + (t.rate!=null ? ' <span class="kpi-rate">('+t.rate.toFixed(0)+'%)</span>' : '');
+    return '<div class="kpi-tile"><div class="kpi-label">'+escapeHtml(t.label)+'</div>'+
+      '<div class="kpi-value">'+valueText+'</div>'+
+      '<div class="kpi-note">'+t.note+'</div></div>';
+  }
+  var groups = divisions.map(function(d){
     var dRows = rows.filter(function(r){ return r.division===d; });
     var op = opRateOf(dRows);
-    tiles.push({ label: d+" 매출총액", value: sum(dRows,"totalRevenue"), note: periodLabel, division: d });
-    tiles.push({ label: d+" 영업이익", value: op.value, rate: op.rate, note: periodLabel, division: d });
+    var tiles = [
+      { label: "매출총액", value: sum(dRows,"totalRevenue"), note: periodLabel },
+      { label: "영업이익", value: op.value, rate: op.rate, note: periodLabel }
+    ];
+    return '<div class="kpi-division">'+
+      '<div class="kpi-division-label">'+escapeHtml(d)+'</div>'+
+      '<div class="kpi-division-row">'+tiles.map(tileHtml).join("")+'</div></div>';
   });
   if (divisions.length > 1){
     var opAll = opRateOf(rows);
-    tiles.push({ label: "합산 매출총액", value: sum(rows,"totalRevenue"), note: periodLabel, division: null });
-    tiles.push({ label: "합산 영업이익", value: opAll.value, rate: opAll.rate, note: periodLabel, division: null });
+    var totalTiles = [
+      { label: "합산 매출총액", value: sum(rows,"totalRevenue"), note: periodLabel },
+      { label: "합산 영업이익", value: opAll.value, rate: opAll.rate, note: periodLabel }
+    ];
+    groups.push('<div class="kpi-division">'+
+      '<div class="kpi-division-label">합산</div>'+
+      '<div class="kpi-division-row">'+totalTiles.map(tileHtml).join("")+'</div></div>');
   }
-  box.innerHTML = tiles.map(function(t){
-    var divClass = t.division==="TKM" ? " div-tkm" : t.division==="NEW" ? " div-new" : "";
-    var valueText = formatKRW(t.value) + (t.rate!=null ? ' <span class="kpi-rate">('+t.rate.toFixed(0)+'%)</span>' : '');
-    return '<div class="kpi-tile'+divClass+'"><div class="kpi-label">'+escapeHtml(t.label)+'</div>'+
-      '<div class="kpi-value">'+valueText+'</div>'+
-      '<div class="kpi-note">'+t.note+'</div></div>';
-  }).join("");
+  box.innerHTML = groups.join("");
 }
 
 /* ================================================================
@@ -543,7 +549,12 @@ function exportRatioOf(division){
 
 function renderForecast(){
   var card = document.getElementById("forecastCard");
-  if (MONTH_KEYS.length < 3){ card.hidden = true; return; }
+  if (MONTH_KEYS.length < 3){
+    card.hidden = true;
+    document.getElementById("forecastChart").innerHTML = '<p class="empty-state">예측에는 최소 3개월치 데이터가 필요합니다.</p>';
+    document.getElementById("forecastKPI").innerHTML = "";
+    return;
+  }
   card.hidden = false;
 
   var data = forecastSeries(FC.division);
@@ -669,23 +680,14 @@ function renderAll(){
   document.getElementById("execMeta").textContent = "대분류명 기준 TKM/NEW 분류 · 단위: 억원";
   renderKPI(periodRows, divisions, periodLabel);
 
-  var periodMonthKeys = MONTH_KEYS.filter(function(mk){ return mk>=f.from && mk<=f.to; });
-  var combinedSeries = divisions.map(function(d){
-    var dRows = rows.filter(function(r){ return r.division===d; });
-    var months = monthlyAgg(dRows, periodMonthKeys);
-    var hue = getDivisionHue(d);
-    return { key:d, label:d, color:hue.dark, values: months.map(function(m){ return m.value; }) };
-  });
-  drawGroupedBars(document.getElementById("monthlyChartCombined"),
-    periodMonthKeys.map(monthKeyLabel), combinedSeries, { height:220 });
-
-  var midGrid = document.getElementById("midGrid");
-  var subGrid = document.getElementById("subGrid");
-  midGrid.innerHTML = divisions.map(function(d){
-    return '<div class="sub-card donut-card"><h3>'+escapeHtml(d)+' 중분류 ('+periodLabel+')</h3><div class="chart-body" id="midChart-'+escapeAttr(d)+'"></div></div>';
-  }).join("");
-  subGrid.innerHTML = divisions.map(function(d){
-    return '<div class="sub-card donut-card"><h3>'+escapeHtml(d)+' 소분류 ('+periodLabel+')</h3><div class="chart-body" id="subChart-'+escapeAttr(d)+'"></div></div>';
+  var drillGrid = document.getElementById("drillGrid");
+  drillGrid.innerHTML = divisions.map(function(d){
+    return '<div class="drill-division">'+
+      '<div class="drill-division-label">'+escapeHtml(d)+'</div>'+
+      '<div class="drill-division-pair">'+
+      '<div class="sub-card donut-card"><h3>중분류</h3><div class="chart-body" id="midChart-'+escapeAttr(d)+'"></div></div>'+
+      '<div class="sub-card donut-card"><h3>소분류</h3><div class="chart-body" id="subChart-'+escapeAttr(d)+'"></div></div>'+
+      '</div></div>';
   }).join("");
 
   divisions.forEach(function(d){

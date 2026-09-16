@@ -8,13 +8,14 @@
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.css">
 <style>
   :root{
-    --page:#f8fafc; --surface:#ffffff; --surface-2:#f8fafc;
-    --ink:#0f172a; --ink-2:#475569; --muted:#64748b;
-    --grid:#e2e8f0; --axis:#cbd5e1; --border:#e2e8f0;
-    --blue:#1e3a5f; --orange:#c2612d; --aqua:#1baf7a; --yellow:#c98a1f;
-    --magenta:#b5567a; --green:#0f7a3d; --violet:#4a3aa7; --red:#b91c1c;
-    --good:#15803d; --critical:#b91c1c; --warnbg:#fffbeb; --warnborder:#f0d060;
-    --tkm-tint:#eff6ff; --new-tint:#fff7ed;
+    --page:#f4f5fb; --surface:#ffffff; --surface-2:#f7f8fd;
+    --ink:#1c2333; --ink-2:#5b6478; --muted:#8890a3;
+    --grid:#edeef7; --axis:#dcdfef; --border:#e7e9f4;
+    --blue:#3b6fe0; --orange:#14b8a6; --aqua:#14b8a6; --yellow:#f0b429;
+    --magenta:#a855c9; --green:#10b981; --violet:#6d5ce8; --red:#e0526b;
+    --good:#10b981; --critical:#e0526b; --warnbg:#fff8e8; --warnborder:#f0d685;
+    --tkm-tint:#eef6f6; --new-tint:#eef2fd;
+    --accent1:#6d5ce8; --accent2:#3b6fe0; --shadow:0 2px 14px rgba(45,55,110,.07);
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;background:var(--page);color:var(--ink);
@@ -23,17 +24,20 @@
   .num, .kpi-value, .kpi-rate{font-variant-numeric:tabular-nums;}
   h1,h2,h3{margin:0;font-weight:700;}
 
-  .app-header{background:var(--blue);color:#fff;padding:9px 20px;display:flex;align-items:center;gap:10px;}
-  .app-logo{width:26px;height:26px;border-radius:6px;background:rgba(255,255,255,.16);
-    display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12.5px;flex-shrink:0;}
+  .app-header{background:var(--surface);color:var(--ink);padding:12px 24px;display:flex;align-items:center;gap:10px;
+    border-bottom:1px solid var(--border);}
+  .app-logo{width:28px;height:28px;border-radius:8px;
+    background:linear-gradient(135deg,var(--accent1),var(--accent2));
+    display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12.5px;flex-shrink:0;color:#fff;}
   .app-brand-text{display:flex;flex-direction:column;line-height:1.25;}
-  .app-brand-text strong{font-size:12.5px;font-weight:700;}
-  .app-brand-text span{font-size:10px;opacity:.75;}
-  .div-badge{font-size:10px;font-weight:700;background:rgba(255,255,255,.16);padding:2px 8px;
-    border-radius:4px;margin-left:2px;letter-spacing:.02em;}
-  .app-header-meta{margin-left:auto;font-size:11px;opacity:.9;text-align:right;}
+  .app-brand-text strong{font-size:13px;font-weight:800;letter-spacing:-0.01em;}
+  .app-brand-text span{font-size:10px;color:var(--muted);}
+  .div-badge{font-size:10px;font-weight:700;background:var(--new-tint);color:var(--accent2);padding:3px 9px;
+    border-radius:999px;margin-left:2px;letter-spacing:.02em;}
+  .app-header-meta{margin-left:auto;font-size:11px;color:var(--muted);text-align:right;}
 
-  .page{max-width:none;margin:0;padding:14px 20px 24px;}
+  .layout-row{max-width:1624px;margin:0 auto;padding:0 28px;display:flex;align-items:flex-start;gap:24px;}
+  .page{flex:1;min-width:0;padding:20px 0 28px;}
   .page-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:10px;flex-wrap:wrap;}
   .page-head h1{font-size:15px;}
   .page-head .sub{font-size:11px;color:var(--muted);}
@@ -42,43 +46,79 @@
   .btn-ghost{background:transparent;border:1px solid var(--border);border-radius:6px;
     padding:5px 11px;font-size:11.5px;color:var(--ink-2);cursor:pointer;}
   .btn-ghost:hover{background:var(--surface-2);}
-  .btn-ghost.primary{background:var(--ink);color:#fff;border-color:var(--ink);}
-  .btn-ghost.primary:hover{background:#2a2a2a;}
+  .btn-ghost.primary{background:linear-gradient(135deg,var(--accent1),var(--accent2));color:#fff;border-color:transparent;}
+  .btn-ghost.primary:hover{filter:brightness(0.92);}
 
-  .controls{display:flex;align-items:center;gap:16px;margin-top:10px;padding:9px 14px;
-    background:var(--surface);border:1px solid var(--border);border-radius:8px;flex-wrap:wrap;}
-  .filter-group{display:flex;align-items:center;gap:7px;}
+  /* ---- 좌측 사이드바 필터: 스크롤해도 따라다니는 유리질감 포인트 컬러 장치 ---- */
+  .filter-sidebar{position:sticky;top:64px;width:210px;flex-shrink:0;margin-top:56px;
+    display:flex;flex-direction:column;gap:14px;overflow:hidden;
+    background:rgba(255,255,255,.55);
+    -webkit-backdrop-filter:blur(16px) saturate(180%);backdrop-filter:blur(16px) saturate(180%);
+    border:1px solid rgba(255,255,255,.7);border-radius:16px;padding:18px 16px 16px;
+    box-shadow:0 8px 28px rgba(76,66,180,.14), inset 0 1px 0 rgba(255,255,255,.6);
+    transition:box-shadow .2s ease;}
+  .filter-sidebar::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;
+    background:linear-gradient(90deg,var(--accent1),var(--accent2));opacity:.85;}
+  .filter-sidebar-title{display:flex;align-items:center;gap:8px;font-size:11.5px;font-weight:800;
+    color:var(--ink);letter-spacing:.02em;}
+  .filter-sidebar-title .ficon{width:20px;height:20px;border-radius:6px;flex-shrink:0;color:#fff;
+    background:linear-gradient(135deg,var(--accent1),var(--accent2));
+    display:flex;align-items:center;justify-content:center;}
+  .filter-sidebar-title .ficon svg{width:11px;height:11px;}
+  .filter-group{display:flex;flex-direction:column;align-items:stretch;gap:6px;}
   .filter-group label{font-size:11px;color:var(--ink-2);font-weight:600;}
-  .filter-group select{font-size:11.5px;padding:4px 6px;border:1px solid var(--border);
-    border-radius:6px;background:#fff;color:var(--ink);}
-  .filter-meta{margin-left:auto;font-size:11px;color:var(--muted);}
-  .period-group{gap:8px;}
+  .filter-group select{font-size:11.5px;padding:5px 6px;border:1px solid var(--border);
+    border-radius:6px;background:#fff;color:var(--ink);width:100%;}
+  .filter-group select:focus{outline:none;border-color:var(--accent1);box-shadow:0 0 0 3px rgba(109,92,232,.14);}
+  .filter-meta{font-size:11px;color:var(--muted);padding-top:10px;border-top:1px dashed var(--border);}
+  .period-group{gap:6px;}
   .period-presets{display:flex;gap:4px;flex-wrap:wrap;}
   .period-btn{font-size:11px;padding:4px 9px;border:1px solid var(--border);border-radius:6px;
     background:#fff;color:var(--ink-2);cursor:pointer;}
   .period-btn:hover{background:var(--surface-2);}
-  .period-btn.active{background:var(--ink);color:#fff;border-color:var(--ink);}
-  .period-sep{color:var(--muted);font-size:11px;}
-  .period-group select{font-size:11.5px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;}
+  .period-btn.active{background:var(--accent1);color:#fff;border-color:var(--accent1);}
+  .period-sep{color:var(--muted);font-size:11px;text-align:center;}
+  .period-group select{font-size:11.5px;padding:5px 6px;border:1px solid var(--border);border-radius:6px;}
+  .filter-sidebar .btn-ghost{width:100%;color:var(--accent1);border-color:rgba(109,92,232,.35);
+    background:rgba(109,92,232,.05);}
+  .filter-sidebar .btn-ghost:hover{background:rgba(109,92,232,.13);}
+  @media (max-width:1100px){
+    .layout-row{flex-direction:column;padding:0;}
+    .page{padding:20px 28px 28px;}
+    .filter-sidebar{position:static;width:auto;margin:12px 28px 0;
+      flex-direction:row;flex-wrap:wrap;align-items:center;background:var(--surface);
+      -webkit-backdrop-filter:none;backdrop-filter:none;}
+    .filter-sidebar::before{display:none;}
+    .filter-sidebar-title{display:none;}
+    .filter-group{flex-direction:row;align-items:center;}
+    .filter-group select{width:auto;}
+    .filter-sidebar .btn-ghost{width:auto;}
+    .filter-meta{margin-left:auto;padding-top:0;border-top:none;}
+  }
 
-  .exec-strip{margin-top:12px;border-radius:8px;overflow:hidden;border:1px solid var(--border);}
-  .exec-strip-head{background:var(--blue);color:#fff;padding:7px 14px;display:flex;justify-content:space-between;
-    align-items:center;font-size:11.5px;font-weight:700;gap:10px;flex-wrap:wrap;}
-  .exec-strip-head .exec-meta{font-size:10px;font-weight:400;opacity:.85;}
-  .kpi-row{display:flex;flex-wrap:wrap;background:var(--surface);}
-  .kpi-tile{background:transparent;border:0;border-right:1px solid var(--border);
-    border-bottom:1px solid var(--border);padding:11px 14px;flex:1 1 155px;min-width:155px;}
-  .kpi-label{font-size:10.5px;color:var(--ink-2);font-weight:600;letter-spacing:.01em;}
-  .kpi-value{font-size:19px;font-weight:700;margin-top:3px;letter-spacing:-0.01em;font-variant-numeric:tabular-nums;}
-  .kpi-note{font-size:10px;color:var(--muted);margin-top:2px;}
-  .kpi-rate{font-size:0.6em;font-weight:700;color:var(--ink-2);margin-left:2px;}
-  .kpi-tile.div-tkm{background:var(--tkm-tint);border-left:3px solid var(--blue);}
-  .kpi-tile.div-new{background:var(--new-tint);border-left:3px solid var(--orange);}
+  .exec-strip{margin-top:18px;}
+  .exec-strip-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;
+    font-size:12px;font-weight:700;color:var(--ink-2);gap:10px;flex-wrap:wrap;}
+  .exec-strip-head .exec-meta{font-size:10.5px;font-weight:400;color:var(--muted);}
+  .kpi-row{display:flex;flex-wrap:wrap;gap:16px;}
+  .kpi-division{flex:1;min-width:220px;border-radius:16px;padding:14px;
+    background:var(--surface-2);border:1px solid var(--border);}
+  .kpi-division-label{font-size:10.5px;font-weight:800;letter-spacing:.02em;margin-bottom:10px;color:var(--ink-2);}
+  .kpi-division-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;}
+  .kpi-tile{background:var(--surface);border:1px solid var(--border);border-radius:12px;
+    padding:14px 16px;box-shadow:var(--shadow);}
+  .kpi-label{font-size:11px;color:var(--ink-2);font-weight:700;letter-spacing:.01em;
+    display:flex;align-items:center;justify-content:space-between;}
+  .kpi-label::after{content:"↗";color:var(--muted);font-weight:400;font-size:12px;}
+  .kpi-value{font-size:20px;font-weight:800;margin-top:9px;letter-spacing:-0.01em;
+    font-variant-numeric:tabular-nums;color:var(--ink);}
+  .kpi-note{font-size:10px;color:var(--muted);margin-top:5px;}
+  .kpi-rate{font-size:0.58em;font-weight:700;color:var(--good);margin-left:3px;}
 
-  .chart-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;
-    padding:12px 14px 14px;margin-top:12px;}
-  .card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
-  .card-head h2{font-size:12.5px;}
+  .chart-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;
+    padding:16px 18px 18px;margin-top:14px;box-shadow:var(--shadow);}
+  .card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+  .card-head h2{font-size:13px;}
   .card-head .sub{font-size:10.5px;color:var(--muted);font-weight:400;}
   .sub-head{font-size:11px;font-weight:700;color:var(--ink-2);margin:10px 0 6px;}
   .sub-head:first-child{margin-top:0;}
@@ -86,7 +126,21 @@
   .two-col{display:grid;grid-template-columns:1.2fr 1fr;gap:12px;}
   @media (max-width:860px){ .two-col{grid-template-columns:1fr;} }
   .multi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;}
-  .sub-card{border:1px solid var(--border);border-radius:8px;padding:10px 12px;background:var(--surface-2);}
+
+  .fc-layout{display:flex;gap:16px;align-items:stretch;}
+  .fc-main{flex:1;min-width:0;}
+  .fc-tool{width:196px;flex-shrink:0;background:var(--surface-2);border:1px solid var(--border);
+    border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:14px;}
+  .fc-tool-title{font-size:11px;font-weight:800;color:var(--ink-2);letter-spacing:.02em;}
+  @media (max-width:860px){ .fc-layout{flex-direction:column;} .fc-tool{width:100%;flex-direction:row;flex-wrap:wrap;} }
+
+  .drill-grid{display:flex;flex-wrap:wrap;gap:16px;}
+  .drill-division{flex:1;min-width:280px;border-radius:16px;padding:14px;
+    background:var(--surface-2);border:1px solid var(--border);}
+  .drill-division-label{font-size:10.5px;font-weight:800;letter-spacing:.02em;margin-bottom:10px;color:var(--ink-2);}
+  .drill-division-pair{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  @media (max-width:640px){ .drill-division-pair{grid-template-columns:1fr;} }
+  .sub-card{border:1px solid var(--border);border-radius:12px;padding:12px 14px;background:var(--surface);}
   .sub-card h3{font-size:11px;font-weight:700;color:var(--ink-2);margin:0 0 6px;}
   .sub-card.donut-card{display:flex;flex-direction:column;align-items:center;text-align:center;}
   .sub-card.donut-card h3{align-self:flex-start;}
@@ -96,8 +150,8 @@
   .bar{cursor:pointer;}
   .bar:hover{opacity:.85;}
   .empty-state{text-align:center;color:var(--muted);font-size:12px;padding:20px 0;}
-  .footer{margin-top:20px;padding-top:10px;border-top:1px solid var(--grid);
-    font-size:10.5px;color:var(--muted);}
+  .footer{margin-top:24px;padding-top:14px;border-top:1px solid var(--grid);
+    font-size:10.5px;color:var(--muted);text-align:right;}
   .tooltip{position:fixed;z-index:50;background:var(--ink);color:#fff;font-size:12px;
     padding:6px 10px;border-radius:5px;pointer-events:none;max-width:260px;white-space:nowrap;}
 
@@ -109,12 +163,12 @@
   .seg-btn{font-size:11px;padding:4px 10px;border:1px solid var(--border);border-radius:6px;
     background:#fff;color:var(--ink-2);cursor:pointer;}
   .seg-btn:hover{background:var(--surface-2);}
-  .seg-btn.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .seg-btn.active{background:var(--accent1);color:#fff;border-color:var(--accent1);}
   .fc-slider-row{display:flex;align-items:center;gap:7px;}
-  .fc-slider-row input[type=range]{width:110px;accent-color:var(--ink);}
+  .fc-slider-row input[type=range]{width:110px;accent-color:var(--accent1);}
   .fc-slider-val{font-size:11px;font-weight:700;color:var(--ink);min-width:36px;font-variant-numeric:tabular-nums;}
   .fc-kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:12px;}
-  .fc-kpi{background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;}
+  .fc-kpi{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;}
   .fc-kpi-label{font-size:10.5px;color:var(--muted);font-weight:600;}
   .fc-kpi-value{font-size:17px;font-weight:700;margin-top:3px;}
   .fc-kpi-sub{font-size:10px;color:var(--muted);margin-top:2px;}
@@ -126,12 +180,10 @@
   .fc-formula td:first-child{color:var(--muted);font-weight:600;white-space:nowrap;width:120px;}
   .fc-formula td:last-child{font-family:"Consolas","Courier New",monospace;color:var(--ink);font-variant-numeric:tabular-nums;}
 
-  .app-nav{display:flex;gap:2px;background:#fff;border-bottom:1px solid var(--border);padding:0 20px;}
-  .app-nav-item{padding:8px 14px;font-size:12px;font-weight:600;color:var(--ink-2);text-decoration:none;
-    border-bottom:2px solid transparent;cursor:pointer;background:none;border-top:none;border-left:none;border-right:none;
-    font-family:inherit;}
-  .app-nav-item:hover{color:var(--ink);}
-  .app-nav-item.active{color:var(--ink);border-bottom-color:var(--blue);}
+  .home-btn{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+    color:var(--ink-2);text-decoration:none;flex-shrink:0;border:1px solid transparent;}
+  .home-btn:hover{background:var(--surface-2);color:var(--ink);border-color:var(--border);}
+  .home-btn svg{width:16px;height:16px;}
 
   .save-status{font-size:11px;color:var(--muted);}
   .loading-note{padding:40px 20px;text-align:center;color:var(--muted);font-size:12px;}
@@ -140,7 +192,9 @@
     .topbar-actions, #resetFiltersBtn{display:none !important;}
     .app-header{background:var(--blue) !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
     body{font-size:11px;}
-    .page{max-width:none;padding:10px 6px;}
+    .layout-row{max-width:none;padding:0;}
+    .filter-sidebar{display:none;}
+    .page{padding:10px 6px;}
     .chart-card, .kpi-tile, .sub-card{break-inside:avoid;}
   }
 </style>
@@ -148,6 +202,9 @@
 <body>
 
 <header class="app-header">
+  <a href="index.html" class="home-btn" title="홈">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
+  </a>
   <span class="app-logo">H</span>
   <div class="app-brand-text">
     <strong>한솔아이원스 안성사업장</strong>
@@ -156,23 +213,14 @@
   <span class="div-badge">TKM · NEW</span>
   <div class="app-header-meta" id="headerMeta"></div>
 </header>
-<nav class="app-nav">
-  <a href="index.html" class="app-nav-item">홈</a>
-</nav>
 
-<div class="page">
+<div class="layout-row">
 
-  <div class="page-head">
-    <div>
-      <h1 id="versionTitle">TKM · NEW 손익 현황 리포트</h1>
-      <span class="sub security-caption">사내 참고용 · 외부 공개 전 보안 검토 필요</span>
+  <aside class="filter-sidebar" id="filterSidebar">
+    <div class="filter-sidebar-title">
+      <span class="ficon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16l-6 7v6l-4 2v-8z"/></svg></span>
+      필터
     </div>
-    <div class="topbar-actions">
-      <button type="button" class="btn-ghost primary" id="printBtn">PDF로 저장 / 인쇄</button>
-    </div>
-  </div>
-
-  <section class="controls" id="controlsBar">
     <div class="filter-group">
       <label for="divisionFilter">사업부문</label>
       <select id="divisionFilter"></select>
@@ -190,7 +238,19 @@
     </div>
     <button type="button" class="btn-ghost" id="resetFiltersBtn">필터 초기화</button>
     <div class="filter-meta" id="periodInfo"></div>
-  </section>
+  </aside>
+
+  <div class="page">
+
+  <div class="page-head">
+    <div>
+      <h1 id="versionTitle">TKM · NEW 손익 현황 리포트</h1>
+      <span class="sub security-caption">사내 참고용 · 외부 공개 전 보안 검토 필요</span>
+    </div>
+    <div class="topbar-actions">
+      <button type="button" class="btn-ghost primary" id="printBtn">PDF로 저장 / 인쇄</button>
+    </div>
+  </div>
 
   <section class="exec-strip" id="execStripWrap">
     <div class="exec-strip-head">
@@ -200,27 +260,20 @@
     <div class="kpi-row" id="kpiRow"></div>
   </section>
 
-  <div class="two-col">
-    <section class="chart-card" id="monthlyChartCard">
-      <div class="card-head"><h2>월별 매출총액 추이</h2><span class="sub">사업부문 통합</span></div>
-      <div class="chart-body" id="monthlyChartCombined"></div>
-    </section>
-
-    <section class="chart-card" id="buChartCard">
-      <div class="card-head"><h2>품목(중분류) 구성비중</h2><span class="sub">선택 기간 기준</span></div>
-      <div class="multi-grid" id="midGrid"></div>
-    </section>
-  </div>
-
-  <section class="chart-card" id="subCatCard">
-    <div class="card-head"><h2>소분류 구성비중 상세</h2><span class="sub">사업부문별 세부 품목</span></div>
-    <div class="multi-grid" id="subGrid"></div>
+  <section class="chart-card" id="buChartCard">
+    <div class="card-head"><h2>품목 구성비중</h2><span class="sub">중분류 → 소분류 · 선택 기간 기준</span></div>
+    <div class="drill-grid" id="drillGrid"></div>
   </section>
 
-  <section class="chart-card" id="forecastCard">
-    <div class="card-head"><h2>매출 예측 시뮬레이션</h2><span class="sub">과거 실적 추세 기반 · 환율 변동 시나리오 반영</span></div>
-    <div>
-      <div class="fc-controls">
+  <section class="chart-card" id="monthlyChartCard">
+    <div class="card-head"><h2>월별 매출총액 추이 · 예측</h2><span class="sub">사업부문 통합 · 95% 예측구간 포함</span></div>
+    <div class="fc-layout">
+      <div class="fc-main">
+        <div class="chart-body" id="forecastChart"></div>
+        <div class="fc-kpi-row" id="forecastKPI"></div>
+      </div>
+      <div class="fc-tool">
+        <div class="fc-tool-title">예측 설정</div>
         <div class="fc-group">
           <span class="fc-group-label">대상</span>
           <div class="seg-group" id="fcDivisionSeg">
@@ -237,26 +290,29 @@
           </div>
         </div>
         <div class="fc-group">
-          <span class="fc-group-label">환율 변동률 (원화 기준)</span>
+          <span class="fc-group-label">환율 변동률 (원화 약세 시 +)</span>
           <div class="fc-slider-row">
             <input type="range" id="fcFx" min="-20" max="20" step="1" value="0">
             <span class="fc-slider-val" id="fcFxV">0%</span>
           </div>
         </div>
       </div>
-      <div class="chart-body" id="forecastChart"></div>
-      <div class="fc-kpi-row" id="forecastKPI"></div>
-      <div class="fc-formula" id="fcFormula"></div>
-      <p class="note" style="font-size:10.5px;color:var(--muted);margin-top:8px;line-height:1.5;">
-        업로드된 실측 매출총액만으로 추세(Holt 지수평활, 감쇠추세)를 연장한 참고용 추정치입니다. 환율 변동률은 거래처명이 A사인 수출 매출 비중에만 곱해서 반영합니다(그 외 거래처는 국내 매출로 취급). 계절성은 반영하지 않았으며, 공식 예측이 아니라 시나리오 탐색용입니다.
-      </p>
     </div>
   </section>
 
+  <section class="chart-card" id="forecastCard">
+    <div class="card-head"><h2>산출 근거</h2><span class="sub">예측 모델 상세 수식</span></div>
+    <div class="fc-formula" id="fcFormula"></div>
+    <p class="note" style="font-size:10.5px;color:var(--muted);margin-top:8px;line-height:1.5;">
+      업로드된 실측 매출총액만으로 추세(Holt 지수평활, 감쇠추세)를 연장한 참고용 추정치입니다. 환율 변동률은 거래처명이 A사인 수출 매출 비중에만 곱해서 반영합니다(그 외 거래처는 국내 매출로 취급). 계절성은 반영하지 않았으며, 공식 예측이 아니라 시나리오 탐색용입니다.
+    </p>
+  </section>
+
   <footer class="footer">
-    <p>모든 수치는 「다차원 손익현황(S)」 형식 엑셀의 매출총액·매출총이익·영업이익을 사업부문·중분류·소분류·월 단위로 합산한 것입니다. 대분류명 기준 TKM영업그룹_발안/안성→TKM, 반도체양산그룹→NEW로 분류했으며, 그 외 대분류 항목은 집계에서 제외했습니다. 예측 시뮬레이션은 참고용이며 공식 보고 전 담당자 검토와 원본 자료 확인이 필요합니다.</p>
+    <p>다차원 손익현황(S) 기준 · 사업부문/중분류/소분류/월 합산 · 예측은 참고용, 검토 필요</p>
   </footer>
 
+  </div>
 </div>
 <div id="tooltip" class="tooltip" hidden></div>
 
