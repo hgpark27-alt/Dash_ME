@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>저장된 버전 열람 · TKM · NEW 손익 현황</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230b0b0b'/%3E%3Crect x='10' y='34' width='11' height='20' rx='2' fill='%231e3a5f'/%3E%3Crect x='26' y='22' width='11' height='32' rx='2' fill='%231e3a5f'/%3E%3Crect x='42' y='12' width='11' height='42' rx='2' fill='%23c2612d'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --page:#f8fafc; --surface:#ffffff; --surface-2:#f8fafc;
+    --ink:#0f172a; --ink-2:#475569; --muted:#64748b;
+    --border:#e2e8f0; --blue:#1e3a5f; --orange:#c2612d;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--page);color:var(--ink);
+    font-family:"Pretendard",system-ui,-apple-system,"Segoe UI","Malgun Gothic",sans-serif;
+    font-size:13.5px;line-height:1.45;min-height:100vh;}
+
+  .app-header{background:var(--blue);color:#fff;padding:9px 20px;display:flex;align-items:center;gap:10px;}
+  .app-logo{width:26px;height:26px;border-radius:6px;background:rgba(255,255,255,.16);
+    display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12.5px;flex-shrink:0;}
+  .app-brand-text{display:flex;flex-direction:column;line-height:1.25;}
+  .app-brand-text strong{font-size:12.5px;font-weight:700;}
+  .app-brand-text span{font-size:10px;opacity:.75;}
+  .div-badge{font-size:10px;font-weight:700;background:rgba(255,255,255,.16);padding:2px 8px;
+    border-radius:4px;margin-left:2px;letter-spacing:.02em;}
+
+  .app-nav{display:flex;gap:2px;background:#fff;border-bottom:1px solid var(--border);padding:0 20px;}
+  .app-nav-item{padding:8px 14px;font-size:12px;font-weight:600;color:var(--ink-2);text-decoration:none;
+    border-bottom:2px solid transparent;cursor:pointer;background:none;border-top:none;border-left:none;border-right:none;
+    font-family:inherit;}
+  .app-nav-item:hover{color:var(--ink);}
+  .app-nav-item.active{color:var(--ink);border-bottom-color:var(--blue);}
+
+  .wrap{max-width:760px;margin:0 auto;padding:28px 24px;}
+  h1{margin:0 0 4px;font-size:16px;font-weight:700;}
+  .sub{margin:0 0 20px;color:var(--muted);font-size:11.5px;}
+
+  .version-list{display:flex;flex-direction:column;gap:8px;}
+  .version-item{display:flex;align-items:center;justify-content:space-between;gap:12px;
+    background:var(--surface);border:1px solid var(--border);border-radius:8px;
+    padding:12px 16px;text-decoration:none;color:inherit;transition:border-color .15s;}
+  .version-item:hover{border-color:var(--blue);}
+  .version-main strong{font-size:13px;}
+  .version-meta{font-size:11px;color:var(--muted);margin-top:3px;}
+  .version-go{font-size:11px;font-weight:700;color:var(--blue);white-space:nowrap;}
+  .empty-note, .loading-note{padding:30px 0;text-align:center;color:var(--muted);font-size:12px;}
+
+  .auth-gate{position:fixed;inset:0;background:rgba(15,23,42,.55);display:flex;
+    align-items:center;justify-content:center;z-index:80;}
+  .auth-gate[hidden]{display:none;}
+  .auth-card{background:#fff;border-radius:12px;padding:28px 26px;width:280px;
+    box-shadow:0 20px 50px rgba(15,23,42,.28);}
+  .auth-card h2{margin:0 0 4px;font-size:15px;color:var(--ink);}
+  .auth-card .sub{margin:0 0 16px;font-size:11px;color:var(--muted);line-height:1.5;}
+  .auth-card label{display:block;font-size:10.5px;font-weight:600;color:var(--ink-2);margin:10px 0 4px;}
+  .auth-card input{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;
+    font-size:13px;box-sizing:border-box;}
+  .auth-card input:focus{outline:none;border-color:var(--blue);}
+  .auth-card .btn-primary{width:100%;margin-top:16px;padding:9px;border:none;border-radius:6px;
+    background:var(--blue);color:#fff;font-weight:700;font-size:13px;cursor:pointer;}
+  .auth-card .btn-primary:hover{background:#16304d;}
+  .auth-error{margin-top:10px;font-size:11px;color:#b91c1c;line-height:1.4;}
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <span class="app-logo">H</span>
+  <div class="app-brand-text">
+    <strong>한솔아이원스 안성사업장</strong>
+    <span>영업본부 손익 현황 관리 시스템</span>
+  </div>
+  <span class="div-badge">TKM · NEW</span>
+</header>
+<nav class="app-nav">
+  <a href="index.html" class="app-nav-item">홈</a>
+  <a href="list.html" class="app-nav-item active">저장된 버전 열람</a>
+</nav>
+
+<div class="wrap">
+  <h1>저장된 버전 열람</h1>
+  <p class="sub">저장된 시점 순서대로 정렬됩니다. 확인할 버전을 선택하세요.</p>
+  <div class="version-list" id="versionList">
+    <div class="loading-note">불러오는 중...</div>
+  </div>
+</div>
+
+<div class="auth-gate" id="authGate" hidden>
+  <div class="auth-card">
+    <h2>로그인</h2>
+    <p class="sub">저장된 버전을 열람하려면 사내 계정 로그인이 필요합니다.</p>
+    <label for="authId">아이디</label>
+    <input type="text" id="authId" autocomplete="username">
+    <label for="authPw">비밀번호</label>
+    <input type="password" id="authPw" autocomplete="current-password">
+    <button type="button" id="authSubmitBtn" class="btn-primary">로그인</button>
+    <div class="auth-error" id="authError" hidden></div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="firebase-init.js"></script>
+<script>
+window.addEventListener("DOMContentLoaded", function(){
+  appGate(function(){
+    var db = firebase.firestore();
+    var listEl = document.getElementById("versionList");
+    db.collection("versions").orderBy("savedAt", "desc").limit(50).get().then(function(snap){
+      if (snap.empty){
+        listEl.innerHTML = '<div class="empty-note">아직 저장된 버전이 없습니다. 자료 준비 화면에서 먼저 저장해주세요.</div>';
+        return;
+      }
+      listEl.innerHTML = snap.docs.map(function(doc){
+        var d = doc.data();
+        var savedAtStr = d.savedAt && d.savedAt.toDate ? d.savedAt.toDate().toLocaleString("ko-KR") : "";
+        var period = (d.monthFrom||"") + "~" + (d.monthTo||"");
+        return '<a class="version-item" href="view.html?v='+doc.id+'">'+
+          '<div class="version-main"><strong>'+period+'</strong>'+
+          '<div class="version-meta">저장 '+savedAtStr+' · '+(d.createdBy||"")+' · '+(d.rowCount||0).toLocaleString()+'행</div></div>'+
+          '<span class="version-go">열람 →</span></a>';
+      }).join("");
+    }).catch(function(err){
+      listEl.innerHTML = '<div class="empty-note">목록을 불러오지 못했습니다: '+err.message+'</div>';
+    });
+  });
+});
+</script>
+</body>
+</html>

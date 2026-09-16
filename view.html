@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TKM · NEW 손익 현황 리포트</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230b0b0b'/%3E%3Crect x='10' y='34' width='11' height='20' rx='2' fill='%231e3a5f'/%3E%3Crect x='26' y='22' width='11' height='32' rx='2' fill='%231e3a5f'/%3E%3Crect x='42' y='12' width='11' height='42' rx='2' fill='%23c2612d'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --page:#f8fafc; --surface:#ffffff; --surface-2:#f8fafc;
+    --ink:#0f172a; --ink-2:#475569; --muted:#64748b;
+    --grid:#e2e8f0; --axis:#cbd5e1; --border:#e2e8f0;
+    --blue:#1e3a5f; --orange:#c2612d; --aqua:#1baf7a; --yellow:#c98a1f;
+    --magenta:#b5567a; --green:#0f7a3d; --violet:#4a3aa7; --red:#b91c1c;
+    --good:#15803d; --critical:#b91c1c; --warnbg:#fffbeb; --warnborder:#f0d060;
+    --tkm-tint:#eff6ff; --new-tint:#fff7ed;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--page);color:var(--ink);
+    font-family:"Pretendard",system-ui,-apple-system,"Segoe UI","Malgun Gothic",sans-serif;
+    font-size:13.5px;line-height:1.45;}
+  .num, .kpi-value, .kpi-rate{font-variant-numeric:tabular-nums;}
+  h1,h2,h3{margin:0;font-weight:700;}
+
+  .app-header{background:var(--blue);color:#fff;padding:9px 20px;display:flex;align-items:center;gap:10px;}
+  .app-logo{width:26px;height:26px;border-radius:6px;background:rgba(255,255,255,.16);
+    display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12.5px;flex-shrink:0;}
+  .app-brand-text{display:flex;flex-direction:column;line-height:1.25;}
+  .app-brand-text strong{font-size:12.5px;font-weight:700;}
+  .app-brand-text span{font-size:10px;opacity:.75;}
+  .div-badge{font-size:10px;font-weight:700;background:rgba(255,255,255,.16);padding:2px 8px;
+    border-radius:4px;margin-left:2px;letter-spacing:.02em;}
+  .app-header-meta{margin-left:auto;font-size:11px;opacity:.9;text-align:right;}
+
+  .page{max-width:none;margin:0;padding:14px 20px 24px;}
+  .page-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:10px;flex-wrap:wrap;}
+  .page-head h1{font-size:15px;}
+  .page-head .sub{font-size:11px;color:var(--muted);}
+  .topbar-actions{display:flex;gap:8px;flex-shrink:0;}
+  .security-caption{font-size:10.5px;color:var(--muted);}
+  .btn-ghost{background:transparent;border:1px solid var(--border);border-radius:6px;
+    padding:5px 11px;font-size:11.5px;color:var(--ink-2);cursor:pointer;}
+  .btn-ghost:hover{background:var(--surface-2);}
+  .btn-ghost.primary{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .btn-ghost.primary:hover{background:#2a2a2a;}
+
+  .controls{display:flex;align-items:center;gap:16px;margin-top:10px;padding:9px 14px;
+    background:var(--surface);border:1px solid var(--border);border-radius:8px;flex-wrap:wrap;}
+  .filter-group{display:flex;align-items:center;gap:7px;}
+  .filter-group label{font-size:11px;color:var(--ink-2);font-weight:600;}
+  .filter-group select{font-size:11.5px;padding:4px 6px;border:1px solid var(--border);
+    border-radius:6px;background:#fff;color:var(--ink);}
+  .filter-meta{margin-left:auto;font-size:11px;color:var(--muted);}
+  .period-group{gap:8px;}
+  .period-presets{display:flex;gap:4px;flex-wrap:wrap;}
+  .period-btn{font-size:11px;padding:4px 9px;border:1px solid var(--border);border-radius:6px;
+    background:#fff;color:var(--ink-2);cursor:pointer;}
+  .period-btn:hover{background:var(--surface-2);}
+  .period-btn.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .period-sep{color:var(--muted);font-size:11px;}
+  .period-group select{font-size:11.5px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;}
+
+  .exec-strip{margin-top:12px;border-radius:8px;overflow:hidden;border:1px solid var(--border);}
+  .exec-strip-head{background:var(--blue);color:#fff;padding:7px 14px;display:flex;justify-content:space-between;
+    align-items:center;font-size:11.5px;font-weight:700;gap:10px;flex-wrap:wrap;}
+  .exec-strip-head .exec-meta{font-size:10px;font-weight:400;opacity:.85;}
+  .kpi-row{display:flex;flex-wrap:wrap;background:var(--surface);}
+  .kpi-tile{background:transparent;border:0;border-right:1px solid var(--border);
+    border-bottom:1px solid var(--border);padding:11px 14px;flex:1 1 155px;min-width:155px;}
+  .kpi-label{font-size:10.5px;color:var(--ink-2);font-weight:600;letter-spacing:.01em;}
+  .kpi-value{font-size:19px;font-weight:700;margin-top:3px;letter-spacing:-0.01em;font-variant-numeric:tabular-nums;}
+  .kpi-note{font-size:10px;color:var(--muted);margin-top:2px;}
+  .kpi-rate{font-size:0.6em;font-weight:700;color:var(--ink-2);margin-left:2px;}
+  .kpi-tile.div-tkm{background:var(--tkm-tint);border-left:3px solid var(--blue);}
+  .kpi-tile.div-new{background:var(--new-tint);border-left:3px solid var(--orange);}
+
+  .chart-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;
+    padding:12px 14px 14px;margin-top:12px;}
+  .card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+  .card-head h2{font-size:12.5px;}
+  .card-head .sub{font-size:10.5px;color:var(--muted);font-weight:400;}
+  .sub-head{font-size:11px;font-weight:700;color:var(--ink-2);margin:10px 0 6px;}
+  .sub-head:first-child{margin-top:0;}
+  .chart-body{width:100%;}
+  .two-col{display:grid;grid-template-columns:1.2fr 1fr;gap:12px;}
+  @media (max-width:860px){ .two-col{grid-template-columns:1fr;} }
+  .multi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;}
+  .sub-card{border:1px solid var(--border);border-radius:8px;padding:10px 12px;background:var(--surface-2);}
+  .sub-card h3{font-size:11px;font-weight:700;color:var(--ink-2);margin:0 0 6px;}
+  .sub-card.donut-card{display:flex;flex-direction:column;align-items:center;text-align:center;}
+  .sub-card.donut-card h3{align-self:flex-start;}
+  .legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:5px;padding-left:0;justify-content:center;}
+  .legend-item{display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--ink-2);}
+  .swatch{width:9px;height:9px;border-radius:2px;display:inline-block;}
+  .bar{cursor:pointer;}
+  .bar:hover{opacity:.85;}
+  .empty-state{text-align:center;color:var(--muted);font-size:12px;padding:20px 0;}
+  .footer{margin-top:20px;padding-top:10px;border-top:1px solid var(--grid);
+    font-size:10.5px;color:var(--muted);}
+  .tooltip{position:fixed;z-index:50;background:var(--ink);color:#fff;font-size:12px;
+    padding:6px 10px;border-radius:5px;pointer-events:none;max-width:260px;white-space:nowrap;}
+
+  .fc-controls{display:flex;flex-wrap:wrap;gap:16px;padding:10px 12px;background:var(--surface-2);
+    border:1px solid var(--border);border-radius:8px;margin-bottom:12px;}
+  .fc-group{display:flex;flex-direction:column;gap:5px;}
+  .fc-group-label{font-size:10.5px;color:var(--ink-2);font-weight:600;}
+  .seg-group{display:flex;gap:4px;}
+  .seg-btn{font-size:11px;padding:4px 10px;border:1px solid var(--border);border-radius:6px;
+    background:#fff;color:var(--ink-2);cursor:pointer;}
+  .seg-btn:hover{background:var(--surface-2);}
+  .seg-btn.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .fc-slider-row{display:flex;align-items:center;gap:7px;}
+  .fc-slider-row input[type=range]{width:110px;accent-color:var(--ink);}
+  .fc-slider-val{font-size:11px;font-weight:700;color:var(--ink);min-width:36px;font-variant-numeric:tabular-nums;}
+  .fc-kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:12px;}
+  .fc-kpi{background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;}
+  .fc-kpi-label{font-size:10.5px;color:var(--muted);font-weight:600;}
+  .fc-kpi-value{font-size:17px;font-weight:700;margin-top:3px;}
+  .fc-kpi-sub{font-size:10px;color:var(--muted);margin-top:2px;}
+  .fc-formula{margin-top:12px;padding:10px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;}
+  .fc-formula-title{font-size:11px;font-weight:700;color:var(--ink-2);margin-bottom:6px;}
+  .fc-formula table{width:100%;border-collapse:collapse;font-size:11px;}
+  .fc-formula td{padding:3px 8px;border-bottom:1px solid var(--border);vertical-align:top;}
+  .fc-formula tr:last-child td{border-bottom:none;}
+  .fc-formula td:first-child{color:var(--muted);font-weight:600;white-space:nowrap;width:120px;}
+  .fc-formula td:last-child{font-family:"Consolas","Courier New",monospace;color:var(--ink);font-variant-numeric:tabular-nums;}
+
+  .app-nav{display:flex;gap:2px;background:#fff;border-bottom:1px solid var(--border);padding:0 20px;}
+  .app-nav-item{padding:8px 14px;font-size:12px;font-weight:600;color:var(--ink-2);text-decoration:none;
+    border-bottom:2px solid transparent;cursor:pointer;background:none;border-top:none;border-left:none;border-right:none;
+    font-family:inherit;}
+  .app-nav-item:hover{color:var(--ink);}
+  .app-nav-item.active{color:var(--ink);border-bottom-color:var(--blue);}
+
+  .save-status{font-size:11px;color:var(--muted);}
+  .auth-gate{position:fixed;inset:0;background:rgba(15,23,42,.55);display:flex;
+    align-items:center;justify-content:center;z-index:80;}
+  .auth-gate[hidden]{display:none;}
+  .auth-card{background:#fff;border-radius:12px;padding:28px 26px;width:280px;
+    box-shadow:0 20px 50px rgba(15,23,42,.28);}
+  .auth-card h2{margin:0 0 4px;font-size:15px;color:var(--ink);}
+  .auth-card .sub{margin:0 0 16px;font-size:11px;color:var(--muted);line-height:1.5;}
+  .auth-card label{display:block;font-size:10.5px;font-weight:600;color:var(--ink-2);margin:10px 0 4px;}
+  .auth-card input{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;
+    font-size:13px;box-sizing:border-box;}
+  .auth-card input:focus{outline:none;border-color:var(--blue);}
+  .auth-card .btn-primary{width:100%;margin-top:16px;padding:9px;border:none;border-radius:6px;
+    background:var(--blue);color:#fff;font-weight:700;font-size:13px;cursor:pointer;}
+  .auth-card .btn-primary:hover{background:#16304d;}
+  .auth-error{margin-top:10px;font-size:11px;color:#b91c1c;line-height:1.4;}
+  .loading-note{padding:40px 20px;text-align:center;color:var(--muted);font-size:12px;}
+
+  @media print{
+    .topbar-actions, #resetFiltersBtn{display:none !important;}
+    .app-header{background:var(--blue) !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    body{font-size:11px;}
+    .page{max-width:none;padding:10px 6px;}
+    .chart-card, .kpi-tile, .sub-card{break-inside:avoid;}
+  }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <span class="app-logo">H</span>
+  <div class="app-brand-text">
+    <strong>한솔아이원스 안성사업장</strong>
+    <span>영업본부 손익 현황 관리 시스템</span>
+  </div>
+  <span class="div-badge">TKM · NEW</span>
+  <div class="app-header-meta" id="headerMeta"></div>
+</header>
+<nav class="app-nav">
+  <a href="index.html" class="app-nav-item">홈</a>
+  <a href="list.html" class="app-nav-item active">저장된 버전 열람</a>
+</nav>
+
+<div class="page">
+
+  <div class="page-head">
+    <div>
+      <h1 id="versionTitle">TKM · NEW 손익 현황 리포트</h1>
+      <span class="sub security-caption">사내 참고용 · 외부 공개 전 보안 검토 필요</span>
+    </div>
+    <div class="topbar-actions">
+      <button type="button" class="btn-ghost primary" id="printBtn">PDF로 저장 / 인쇄</button>
+    </div>
+  </div>
+
+  <section class="controls" id="controlsBar">
+    <div class="filter-group">
+      <label for="divisionFilter">사업부문</label>
+      <select id="divisionFilter"></select>
+    </div>
+    <div class="filter-group">
+      <label for="midFilter">중분류</label>
+      <select id="midFilter"></select>
+    </div>
+    <div class="filter-group period-group">
+      <label>기간</label>
+      <div class="period-presets" id="periodPresets"></div>
+      <select id="periodFrom"></select>
+      <span class="period-sep">~</span>
+      <select id="periodTo"></select>
+    </div>
+    <button type="button" class="btn-ghost" id="resetFiltersBtn">필터 초기화</button>
+    <div class="filter-meta" id="periodInfo"></div>
+  </section>
+
+  <section class="exec-strip" id="execStripWrap">
+    <div class="exec-strip-head">
+      <span id="execTitle">누적 실적 지표</span>
+      <span class="exec-meta" id="execMeta">단위: 억원</span>
+    </div>
+    <div class="kpi-row" id="kpiRow"></div>
+  </section>
+
+  <div class="two-col">
+    <section class="chart-card" id="monthlyChartCard">
+      <div class="card-head"><h2>월별 매출총액 추이</h2><span class="sub">사업부문 통합</span></div>
+      <div class="chart-body" id="monthlyChartCombined"></div>
+    </section>
+
+    <section class="chart-card" id="buChartCard">
+      <div class="card-head"><h2>품목(중분류) 구성비중</h2><span class="sub">선택 기간 기준</span></div>
+      <div class="multi-grid" id="midGrid"></div>
+    </section>
+  </div>
+
+  <section class="chart-card" id="subCatCard">
+    <div class="card-head"><h2>소분류 구성비중 상세</h2><span class="sub">사업부문별 세부 품목</span></div>
+    <div class="multi-grid" id="subGrid"></div>
+  </section>
+
+  <section class="chart-card" id="forecastCard">
+    <div class="card-head"><h2>매출 예측 시뮬레이션</h2><span class="sub">과거 실적 추세 기반 · 환율 변동 시나리오 반영</span></div>
+    <div>
+      <div class="fc-controls">
+        <div class="fc-group">
+          <span class="fc-group-label">대상</span>
+          <div class="seg-group" id="fcDivisionSeg">
+            <button type="button" class="seg-btn" data-val="TKM">TKM</button>
+            <button type="button" class="seg-btn" data-val="NEW">NEW</button>
+            <button type="button" class="seg-btn active" data-val="ALL">합산</button>
+          </div>
+        </div>
+        <div class="fc-group">
+          <span class="fc-group-label">예측 개월</span>
+          <div class="fc-slider-row">
+            <input type="range" id="fcHorizon" min="1" max="6" step="1" value="3">
+            <span class="fc-slider-val" id="fcHorizonV">3개월</span>
+          </div>
+        </div>
+        <div class="fc-group">
+          <span class="fc-group-label">환율 변동률 (원화 기준)</span>
+          <div class="fc-slider-row">
+            <input type="range" id="fcFx" min="-20" max="20" step="1" value="0">
+            <span class="fc-slider-val" id="fcFxV">0%</span>
+          </div>
+        </div>
+      </div>
+      <div class="chart-body" id="forecastChart"></div>
+      <div class="fc-kpi-row" id="forecastKPI"></div>
+      <div class="fc-formula" id="fcFormula"></div>
+      <p class="note" style="font-size:10.5px;color:var(--muted);margin-top:8px;line-height:1.5;">
+        업로드된 실측 매출총액만으로 추세(Holt 지수평활, 감쇠추세)를 연장한 참고용 추정치입니다. 환율 변동률은 거래처명이 A사인 수출 매출 비중에만 곱해서 반영합니다(그 외 거래처는 국내 매출로 취급). 계절성은 반영하지 않았으며, 공식 예측이 아니라 시나리오 탐색용입니다.
+      </p>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <p>모든 수치는 「다차원 손익현황(S)」 형식 엑셀의 매출총액·매출총이익·영업이익을 사업부문·중분류·소분류·월 단위로 합산한 것입니다. 대분류명 기준 TKM영업그룹_발안/안성→TKM, 반도체양산그룹→NEW로 분류했으며, 그 외 대분류 항목은 집계에서 제외했습니다. 예측 시뮬레이션은 참고용이며 공식 보고 전 담당자 검토와 원본 자료 확인이 필요합니다.</p>
+  </footer>
+
+</div>
+<div id="tooltip" class="tooltip" hidden></div>
+
+<div class="auth-gate" id="authGate" hidden>
+  <div class="auth-card">
+    <h2>로그인</h2>
+    <p class="sub">저장된 버전을 열람하려면 사내 계정 로그인이 필요합니다.</p>
+    <label for="authId">아이디</label>
+    <input type="text" id="authId" autocomplete="username">
+    <label for="authPw">비밀번호</label>
+    <input type="password" id="authPw" autocomplete="current-password">
+    <button type="button" id="authSubmitBtn" class="btn-primary">로그인</button>
+    <div class="auth-error" id="authError" hidden></div>
+  </div>
+</div>
+
+<script>
+window.addEventListener("DOMContentLoaded", function(){
+  var btn = document.getElementById("printBtn");
+  if (btn) btn.addEventListener("click", function(){ window.print(); });
+
+  var params = new URLSearchParams(window.location.search);
+  var versionId = params.get("v");
+  if (!versionId){
+    document.getElementById("headerMeta").textContent = "잘못된 접근입니다 (버전 정보 없음)";
+    return;
+  }
+
+  appGate(function(){
+    var db = firebase.firestore();
+    document.getElementById("headerMeta").textContent = "버전 정보를 불러오는 중...";
+    db.collection("versions").doc(versionId).get().then(function(doc){
+      if (!doc.exists){
+        document.getElementById("headerMeta").textContent = "존재하지 않는 버전입니다.";
+        return;
+      }
+      var meta = doc.data();
+      var chunkCount = meta.chunkCount || 0;
+      var chunkPromises = [];
+      for (var i=0;i<chunkCount;i++){
+        chunkPromises.push(versionRefChunk(db, versionId, i));
+      }
+      return Promise.all(chunkPromises).then(function(chunkDocs){
+        var rows = [];
+        chunkDocs.forEach(function(cd){ rows = rows.concat(cd.data().rows); });
+        var savedAtStr = meta.savedAt && meta.savedAt.toDate ? meta.savedAt.toDate().toLocaleString("ko-KR") : "";
+        document.getElementById("versionTitle").textContent =
+          "TKM · NEW 손익 현황 리포트 ("+(meta.monthFrom||"")+"~"+(meta.monthTo||"")+")";
+        document.getElementById("headerMeta").textContent =
+          "저장 "+savedAtStr+" · "+(meta.createdBy||"")+" · "+rows.length.toLocaleString()+"행";
+        seedReportData(rows);
+      });
+    }).catch(function(err){
+      document.getElementById("headerMeta").textContent = "불러오기 실패: "+err.message;
+    });
+  });
+
+  function versionRefChunk(db, versionId, idx){
+    return db.collection("versions").doc(versionId).collection("chunks").doc(String(idx)).get();
+  }
+});
+</script>
+
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="firebase-init.js"></script>
+<script src="app_viewer.js"></script>
+</body>
+</html>
