@@ -1248,22 +1248,48 @@ function saveVersionClicked(){
   appGate(function(){ performSaveVersion(rows); });
 }
 
+/* 화면에서 실제로 쓰는 건 (사업부문·월·중분류·소분류·수출여부) 조합별 합계뿐이고
+   품목코드/품명/거래처명 개별 단위는 어떤 차트·툴팁에도 쓰이지 않는다.
+   원본 행을 그대로 저장하면 같은 조합의 거래가 여러 건일수록 불필요하게
+   커지므로, 저장 전에 이 조합 기준으로 미리 합산해서 레코드 수 자체를 줄인다. */
+function compressRows(rows){
+  var groups = {};
+  rows.forEach(function(r){
+    var key = r.division+"|"+r.monthKey+"|"+r.midCategory+"|"+r.subCategory+"|"+(r.isExport?1:0);
+    var g = groups[key];
+    if (!g){
+      g = groups[key] = {
+        division:r.division, monthKey:r.monthKey, midCategory:r.midCategory, subCategory:r.subCategory,
+        isExport:!!r.isExport, qty:0, productRevenue:0, otherRevenue:0, totalRevenue:0,
+        cogs:0, grossProfit:0, opProfit:0, ordinaryProfit:0
+      };
+    }
+    g.qty += r.qty||0; g.productRevenue += r.productRevenue||0; g.otherRevenue += r.otherRevenue||0;
+    g.totalRevenue += r.totalRevenue||0; g.cogs += r.cogs||0; g.grossProfit += r.grossProfit||0;
+    g.opProfit += r.opProfit||0; g.ordinaryProfit += r.ordinaryProfit||0;
+  });
+  return Object.keys(groups).map(function(k){ return groups[k]; });
+}
+
 function performSaveVersion(rows){
   var btn = document.getElementById("saveVersionBtn");
   var statusEl = document.getElementById("saveStatus");
   btn.disabled = true;
   statusEl.hidden = false; statusEl.className = "save-status"; statusEl.textContent = "저장 중...";
-  var months = Array.from(new Set(rows.map(function(r){ return r.monthKey; }))).sort();
+  var originalRowCount = rows.length;
+  var compressed = compressRows(rows);
+  var months = Array.from(new Set(compressed.map(function(r){ return r.monthKey; }))).sort();
   var CHUNK = 2000;
   var chunks = [];
-  for (var i=0;i<rows.length;i+=CHUNK) chunks.push(rows.slice(i, i+CHUNK));
+  for (var i=0;i<compressed.length;i+=CHUNK) chunks.push(compressed.slice(i, i+CHUNK));
   var db = firebase.firestore();
   var versionRef = db.collection("versions").doc();
   var meta = {
     savedAt: firebase.firestore.FieldValue.serverTimestamp(),
     monthFrom: months[0] || null,
     monthTo: months[months.length-1] || null,
-    rowCount: rows.length,
+    rowCount: originalRowCount,
+    recordCount: compressed.length,
     chunkCount: chunks.length,
     createdBy: "admin"
   };
@@ -1273,7 +1299,7 @@ function performSaveVersion(rows){
     }));
   }).then(function(){
     statusEl.className = "save-status ok";
-    statusEl.textContent = "저장 완료 ("+rows.length.toLocaleString()+"행)";
+    statusEl.textContent = "저장 완료 (원본 "+originalRowCount.toLocaleString()+"행 → 압축 "+compressed.length.toLocaleString()+"건)";
     btn.disabled = false;
   }).catch(function(err){
     statusEl.className = "save-status err";

@@ -293,7 +293,7 @@ window.addEventListener("DOMContentLoaded", function(){
         document.getElementById("versionTitle").textContent =
           "TKM · NEW 손익 현황 리포트 ("+(meta.monthFrom||"")+"~"+(meta.monthTo||"")+")";
         document.getElementById("headerMeta").textContent =
-          "저장 "+savedAtStr+" · "+(meta.createdBy||"")+" · "+rows.length.toLocaleString()+"행";
+          "저장 "+savedAtStr+" · "+(meta.createdBy||"")+" · "+(meta.rowCount||rows.length).toLocaleString()+"행";
         seedReportData(rows);
       });
     }).catch(function(err){
