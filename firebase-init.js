@@ -11,8 +11,15 @@ var firebaseConfig = {
   appId: "1:538136012438:web:fd524b51a5262b4fec84b7"
 };
 firebase.initializeApp(firebaseConfig);
-firebase.auth().signInAnonymously().catch(function(err){
-  console.error("Firebase 익명 로그인 실패", err);
+/* onAuthStateChanged로 기존 세션 복원을 먼저 기다린 뒤, 세션이 전혀 없을 때만
+   새로 익명 로그인한다 — 매번 무조건 호출하면 이미 로그인된 상태에서도
+   불필요한 네트워크 왕복(약 300ms)이 매 페이지 로드마다 발생한다. */
+firebase.auth().onAuthStateChanged(function(user){
+  if (!user){
+    firebase.auth().signInAnonymously().catch(function(err){
+      console.error("Firebase 익명 로그인 실패", err);
+    });
+  }
 });
 
 var APP_GATE_KEY = "dashGateOk";
