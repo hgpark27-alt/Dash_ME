@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TKM · NEW 손익 현황</title>
+<title>손익 현황 버전 열람</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230b0b0b'/%3E%3Crect x='10' y='34' width='11' height='20' rx='2' fill='%231e3a5f'/%3E%3Crect x='26' y='22' width='11' height='32' rx='2' fill='%231e3a5f'/%3E%3Crect x='42' y='12' width='11' height='42' rx='2' fill='%23c2612d'/%3E%3C/svg%3E">
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css">
 <style>
@@ -26,23 +26,43 @@
   .div-badge{font-size:10px;font-weight:700;background:rgba(255,255,255,.16);padding:2px 8px;
     border-radius:4px;margin-left:2px;letter-spacing:.02em;}
 
-  .wrap{max-width:760px;margin:0 auto;padding:36px 24px;}
-  h1{margin:0 0 4px;font-size:18px;font-weight:700;letter-spacing:-0.01em;}
-  .sub{margin:0 0 22px;color:var(--muted);font-size:11.5px;}
-  .cards{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
-  @media (max-width:640px){ .cards{grid-template-columns:1fr;} }
-  .card{background:var(--surface);border:1px solid var(--border);border-radius:8px;
-    padding:18px 18px;text-decoration:none;color:inherit;display:flex;flex-direction:column;
-    gap:7px;transition:border-color .15s, transform .1s;}
-  .card:hover{border-color:var(--ink);transform:translateY(-1px);}
-  .card-icon{width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;
-    font-size:15px;color:#fff;}
-  .icon-manage{background:var(--blue);}
-  .icon-view{background:var(--orange);}
-  .card h2{font-size:13.5px;margin:0;}
-  .card p{margin:0;font-size:11.5px;color:var(--muted);line-height:1.6;}
-  .card .go{margin-top:auto;font-size:11px;font-weight:700;color:var(--ink);padding-top:4px;}
-  .foot{margin-top:22px;font-size:10.5px;color:var(--muted);line-height:1.6;}
+  .wrap{max-width:760px;margin:0 auto;padding:28px 24px;}
+  .page-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:20px;flex-wrap:wrap;}
+  h1{margin:0 0 4px;font-size:16px;font-weight:700;}
+  .sub{margin:0;color:var(--muted);font-size:11.5px;}
+  .btn-create{flex-shrink:0;display:inline-flex;align-items:center;gap:6px;background:var(--blue);color:#fff;
+    text-decoration:none;font-size:13px;font-weight:700;padding:10px 16px;border-radius:8px;white-space:nowrap;
+    transition:background .12s;}
+  .btn-create:hover{background:#16304d;}
+
+  .version-list{display:flex;flex-direction:column;gap:7px;}
+  .version-item{position:relative;background:var(--surface);border:1px solid var(--border);
+    border-radius:8px;padding:11px 68px 11px 14px;transition:border-color .15s;}
+  .version-item:hover{border-color:var(--blue);}
+  .item-link{position:absolute;inset:0;z-index:1;}
+  .version-main{position:relative;}
+  .version-main strong{font-size:14px;font-weight:800;}
+  .version-meta{font-size:11px;color:var(--muted);margin-top:3px;}
+  .empty-note, .loading-note{padding:30px 0;text-align:center;color:var(--muted);font-size:12px;}
+
+  .latest-card{position:relative;background:linear-gradient(180deg,#eef5ff,#ffffff);
+    border:1.5px solid var(--blue);border-radius:10px;padding:14px 68px 14px 16px;margin-bottom:16px;
+    box-shadow:0 2px 10px rgba(30,58,95,.10);transition:box-shadow .12s;}
+  .latest-card:hover{box-shadow:0 5px 16px rgba(30,58,95,.16);}
+  .latest-badge{display:inline-flex;align-items:center;gap:3px;background:var(--blue);color:#fff;
+    font-size:10.5px;font-weight:800;letter-spacing:.03em;padding:2px 9px;border-radius:999px;margin-bottom:7px;}
+  .latest-period{font-size:19px;font-weight:800;color:var(--ink);letter-spacing:-0.01em;}
+  .latest-meta{font-size:11.5px;color:var(--ink-2);margin-top:4px;}
+  .older-heading{font-size:11.5px;font-weight:700;color:var(--muted);margin:4px 0 8px;}
+
+  .item-icons{position:absolute;right:10px;bottom:10px;z-index:2;display:flex;gap:4px;}
+  .icon-btn{width:28px;height:28px;border-radius:6px;border:1px solid var(--border);background:#fff;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);padding:0;}
+  .icon-btn:hover{background:var(--surface-2);color:var(--ink);}
+  .icon-btn.fix-btn.active{color:#c98a1f;border-color:#c98a1f;background:#fffbeb;}
+  .icon-btn.del-btn:hover{color:#b91c1c;border-color:#b91c1c;background:#fef2f2;}
+  .icon-btn svg{width:15px;height:15px;}
+
 </style>
 </head>
 <body>
@@ -57,23 +77,104 @@
 </header>
 
 <div class="wrap">
-  <h1>손익 현황</h1>
-  <p class="sub">역할에 맞는 화면을 선택하세요.</p>
-
-  <div class="cards">
-    <a class="card" href="manage.html">
-      <div class="card-icon icon-manage">＋</div>
-      <h2>자료 준비</h2>
-      <p>월별 손익현황 엑셀을 업로드해서 현황을 확인하고, 확정되면 버전으로 저장합니다.</p>
-      <div class="go">시작하기 →</div>
-    </a>
-    <a class="card" href="list.html" id="viewCard">
-      <div class="card-icon icon-view">▤</div>
-      <h2>자료 열람</h2>
-      <p>계정으로 로그인 후, 저장된 버전 목록에서 시점을 선택해 확인합니다.</p>
-      <div class="go">버전 목록 열기 →</div>
-    </a>
+  <div class="page-head">
+    <div>
+      <h1>손익 현황 버전 열람</h1>
+      <p class="sub">저장된 시점 순서대로 정렬됩니다. 확인할 버전을 선택하세요.</p>
+    </div>
+    <a class="btn-create" href="manage.html">+ 보고서 생성</a>
   </div>
-
-  <p class="foot">사내 참고용 · 외부 공개 전 보안 검토 필요. 저장된 버전은 계정으로 로그인해야만 열람·저장할 수 있습니다.</p>
+  <div class="version-list" id="versionList">
+    <div class="loading-note">불러오는 중...</div>
+  </div>
 </div>
+
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="firebase-init.js"></script>
+<script>
+var ICON_STAR = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5l2.9 6.6 7.1.6-5.4 4.7 1.7 7-6.3-3.9-6.3 3.9 1.7-7-5.4-4.7 7.1-.6z"/></svg>';
+var ICON_TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>';
+
+function periodOf(d){ return (d.monthFrom||"") + "~" + (d.monthTo||""); }
+function savedAtOf(d){ return d.savedAt && d.savedAt.toDate ? d.savedAt.toDate().toLocaleString("ko-KR") : ""; }
+
+function iconsHtml(id, fixed){
+  return '<div class="item-icons">'+
+    '<button type="button" class="icon-btn fix-btn'+(fixed?' active':'')+'" data-id="'+id+'" data-fixed="'+(fixed?1:0)+'" title="고정 표시">'+ICON_STAR+'</button>'+
+    '<button type="button" class="icon-btn del-btn" data-id="'+id+'" title="삭제">'+ICON_TRASH+'</button>'+
+    '</div>';
+}
+
+function loadVersionList(){
+  var db = firebase.firestore();
+  var listEl = document.getElementById("versionList");
+  listEl.innerHTML = '<div class="loading-note">불러오는 중...</div>';
+  db.collection("versions").orderBy("savedAt", "desc").limit(50).get().then(function(snap){
+    if (snap.empty){
+      listEl.innerHTML = '<div class="empty-note">아직 저장된 버전이 없습니다. "보고서 생성"에서 먼저 저장해주세요.</div>';
+      return;
+    }
+    var docs = snap.docs;
+    var latestDoc = docs[0];
+    var ld = latestDoc.data();
+    var html = '<div class="latest-card">'+
+      '<a class="item-link" href="view.html?v='+latestDoc.id+'"></a>'+
+      '<div class="version-main"><span class="latest-badge">최신 버전</span>'+
+      '<div class="latest-period">저장 '+savedAtOf(ld)+'</div>'+
+      '<div class="latest-meta">데이터 기준일 '+periodOf(ld)+' · '+(ld.createdBy||"")+' · '+(ld.rowCount||0).toLocaleString()+'행</div></div>'+
+      iconsHtml(latestDoc.id, ld.fixed)+'</div>';
+
+    var rest = docs.slice(1);
+    if (rest.length){
+      html += '<div class="older-heading">이전 버전 ('+rest.length+'개)</div>';
+      html += rest.map(function(doc){
+        var d = doc.data();
+        return '<div class="version-item">'+
+          '<a class="item-link" href="view.html?v='+doc.id+'"></a>'+
+          '<div class="version-main"><strong>저장 '+savedAtOf(d)+'</strong>'+
+          '<div class="version-meta">데이터 기준일 '+periodOf(d)+' · '+(d.createdBy||"")+' · '+(d.rowCount||0).toLocaleString()+'행</div></div>'+
+          iconsHtml(doc.id, d.fixed)+'</div>';
+      }).join("");
+    }
+    listEl.innerHTML = html;
+
+    listEl.querySelectorAll(".fix-btn").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var id = btn.getAttribute("data-id");
+        var nowFixed = btn.getAttribute("data-fixed") === "1";
+        btn.disabled = true;
+        db.collection("versions").doc(id).update({ fixed: !nowFixed }).then(loadVersionList).catch(function(err){
+          alert("고정 표시 변경 실패: "+err.message);
+          btn.disabled = false;
+        });
+      });
+    });
+    listEl.querySelectorAll(".del-btn").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var id = btn.getAttribute("data-id");
+        if (!confirm("이 버전을 삭제할까요? 되돌릴 수 없습니다.")) return;
+        btn.disabled = true;
+        var versionRef = db.collection("versions").doc(id);
+        versionRef.collection("chunks").get().then(function(chunkSnap){
+          return Promise.all(chunkSnap.docs.map(function(c){ return c.ref.delete(); }));
+        }).then(function(){
+          return versionRef.delete();
+        }).then(loadVersionList).catch(function(err){
+          alert("삭제 실패: "+err.message);
+          btn.disabled = false;
+        });
+      });
+    });
+  }).catch(function(err){
+    listEl.innerHTML = '<div class="empty-note">목록을 불러오지 못했습니다: '+err.message+'</div>';
+  });
+}
+
+window.addEventListener("DOMContentLoaded", function(){
+  appGate(loadVersionList);
+});
+</script>
+</body>
+</html>
