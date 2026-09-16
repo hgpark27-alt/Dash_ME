@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TKM · NEW 손익 현황 리포트</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230b0b0b'/%3E%3Crect x='10' y='34' width='11' height='20' rx='2' fill='%231e3a5f'/%3E%3Crect x='26' y='22' width='11' height='32' rx='2' fill='%231e3a5f'/%3E%3Crect x='42' y='12' width='11' height='42' rx='2' fill='%23c2612d'/%3E%3C/svg%3E">
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css">
 <style>
   :root{
     --page:#f8fafc; --surface:#ffffff; --surface-2:#f8fafc;
@@ -17,7 +18,7 @@
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;background:var(--page);color:var(--ink);
-    font-family:"Pretendard",system-ui,-apple-system,"Segoe UI","Malgun Gothic",sans-serif;
+    font-family:"Pretendard Variable","Pretendard",system-ui,-apple-system,"Segoe UI","Malgun Gothic",sans-serif;
     font-size:13.5px;line-height:1.45;}
   .num, .kpi-value, .kpi-rate{font-variant-numeric:tabular-nums;}
   h1,h2,h3{margin:0;font-weight:700;}
@@ -133,21 +134,6 @@
   .app-nav-item.active{color:var(--ink);border-bottom-color:var(--blue);}
 
   .save-status{font-size:11px;color:var(--muted);}
-  .auth-gate{position:fixed;inset:0;background:rgba(15,23,42,.55);display:flex;
-    align-items:center;justify-content:center;z-index:80;}
-  .auth-gate[hidden]{display:none;}
-  .auth-card{background:#fff;border-radius:12px;padding:28px 26px;width:280px;
-    box-shadow:0 20px 50px rgba(15,23,42,.28);}
-  .auth-card h2{margin:0 0 4px;font-size:15px;color:var(--ink);}
-  .auth-card .sub{margin:0 0 16px;font-size:11px;color:var(--muted);line-height:1.5;}
-  .auth-card label{display:block;font-size:10.5px;font-weight:600;color:var(--ink-2);margin:10px 0 4px;}
-  .auth-card input{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;
-    font-size:13px;box-sizing:border-box;}
-  .auth-card input:focus{outline:none;border-color:var(--blue);}
-  .auth-card .btn-primary{width:100%;margin-top:16px;padding:9px;border:none;border-radius:6px;
-    background:var(--blue);color:#fff;font-weight:700;font-size:13px;cursor:pointer;}
-  .auth-card .btn-primary:hover{background:#16304d;}
-  .auth-error{margin-top:10px;font-size:11px;color:#b91c1c;line-height:1.4;}
   .loading-note{padding:40px 20px;text-align:center;color:var(--muted);font-size:12px;}
 
   @media print{
@@ -165,7 +151,7 @@
   <span class="app-logo">H</span>
   <div class="app-brand-text">
     <strong>한솔아이원스 안성사업장</strong>
-    <span>영업본부 손익 현황 관리 시스템</span>
+    <span>영업팀 손익 현황 관리 시스템</span>
   </div>
   <span class="div-badge">TKM · NEW</span>
   <div class="app-header-meta" id="headerMeta"></div>
@@ -274,19 +260,6 @@
 
 </div>
 <div id="tooltip" class="tooltip" hidden></div>
-
-<div class="auth-gate" id="authGate" hidden>
-  <div class="auth-card">
-    <h2>로그인</h2>
-    <p class="sub">저장된 버전을 열람하려면 사내 계정 로그인이 필요합니다.</p>
-    <label for="authId">아이디</label>
-    <input type="text" id="authId" autocomplete="username">
-    <label for="authPw">비밀번호</label>
-    <input type="password" id="authPw" autocomplete="current-password">
-    <button type="button" id="authSubmitBtn" class="btn-primary">로그인</button>
-    <div class="auth-error" id="authError" hidden></div>
-  </div>
-</div>
 
 <script>
 window.addEventListener("DOMContentLoaded", function(){

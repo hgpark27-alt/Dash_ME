@@ -17,42 +17,17 @@ firebase.auth().signInAnonymously().catch(function(err){
 
 var APP_GATE_KEY = "dashGateOk";
 
-/* authGate 마크업이 있는 페이지에서 호출.
-   이미 통과했었거나(로컬 저장) 이번에 통과하면 onUnlocked()를 실행한다. */
+function dashIsUnlocked(){
+  try { return localStorage.getItem(APP_GATE_KEY) === "1"; } catch(e){ return false; }
+}
+function dashSetUnlocked(){
+  try { localStorage.setItem(APP_GATE_KEY, "1"); } catch(e){}
+}
+
+/* 로그인이 안 되어 있으면 login.html(별도 페이지)로 이동시키고,
+   이미 로그인돼 있으면 onUnlocked()를 바로 실행한다. */
 function appGate(onUnlocked){
-  var gate = document.getElementById("authGate");
-  var already = false;
-  try { already = localStorage.getItem(APP_GATE_KEY) === "1"; } catch(e){}
-  if (already){
-    if (gate) gate.hidden = true;
-    onUnlocked();
-    return;
-  }
-  if (!gate){ onUnlocked(); return; }
-  gate.hidden = false;
-
-  var idInput = document.getElementById("authId");
-  var pwInput = document.getElementById("authPw");
-  var errBox = document.getElementById("authError");
-  var btn = document.getElementById("authSubmitBtn");
-
-  function tryUnlock(){
-    errBox.hidden = true;
-    firebase.firestore().collection("config").doc("gate").get().then(function(doc){
-      var data = doc.data() || {};
-      if (idInput.value.trim() === data.id && pwInput.value === data.pw){
-        try { localStorage.setItem(APP_GATE_KEY, "1"); } catch(e){}
-        gate.hidden = true;
-        onUnlocked();
-      } else {
-        errBox.textContent = "아이디 또는 비밀번호가 올바르지 않습니다.";
-        errBox.hidden = false;
-      }
-    }).catch(function(err){
-      errBox.textContent = "확인 중 오류가 발생했습니다: " + err.message;
-      errBox.hidden = false;
-    });
-  }
-  btn.addEventListener("click", tryUnlock);
-  pwInput.addEventListener("keydown", function(e){ if (e.key === "Enter") tryUnlock(); });
+  if (dashIsUnlocked()){ onUnlocked(); return; }
+  var here = location.pathname.split("/").pop() + location.search;
+  location.href = "login.html?next=" + encodeURIComponent(here);
 }

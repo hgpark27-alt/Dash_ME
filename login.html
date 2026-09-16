@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>로그인 · 손익 현황</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230b0b0b'/%3E%3Crect x='10' y='34' width='11' height='20' rx='2' fill='%231e3a5f'/%3E%3Crect x='26' y='22' width='11' height='32' rx='2' fill='%231e3a5f'/%3E%3Crect x='42' y='12' width='11' height='42' rx='2' fill='%23c2612d'/%3E%3C/svg%3E">
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css">
+<style>
+  :root{
+    --page:#ffffff; --ink:#0f172a; --ink-2:#475569; --muted:#64748b;
+    --border:#e2e8f0; --blue:#1e3a5f; --orange:#c2612d;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--page);color:var(--ink);
+    font-family:"Pretendard Variable","Pretendard",system-ui,-apple-system,"Segoe UI","Malgun Gothic",sans-serif;
+    font-size:13.5px;line-height:1.45;height:100%;}
+  .wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
+  .box{width:300px;}
+  .brand{display:flex;align-items:center;gap:10px;margin-bottom:28px;justify-content:center;}
+  .brand-logo{width:32px;height:32px;border-radius:7px;background:var(--blue);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;}
+  .brand-text{display:flex;flex-direction:column;line-height:1.25;}
+  .brand-text strong{font-size:13px;}
+  .brand-text span{font-size:10.5px;color:var(--muted);}
+  h1{margin:0 0 4px;font-size:17px;text-align:center;}
+  .sub{margin:0 0 24px;color:var(--muted);font-size:12px;text-align:center;}
+  label{display:block;font-size:11px;font-weight:600;color:var(--ink-2);margin:14px 0 5px;}
+  input{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:7px;
+    font-size:14px;box-sizing:border-box;font-family:inherit;}
+  input:focus{outline:none;border-color:var(--blue);}
+  .btn-primary{width:100%;margin-top:22px;padding:11px;border:none;border-radius:7px;
+    background:var(--blue);color:#fff;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;}
+  .btn-primary:hover{background:#16304d;}
+  .btn-primary:disabled{opacity:.55;cursor:not-allowed;}
+  .auth-error{margin-top:12px;font-size:11.5px;color:#b91c1c;line-height:1.4;text-align:center;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="box">
+    <div class="brand">
+      <span class="brand-logo">H</span>
+      <div class="brand-text">
+        <strong>한솔아이원스 안성사업장</strong>
+        <span>영업팀 손익 현황 관리 시스템</span>
+      </div>
+    </div>
+    <h1>로그인</h1>
+    <p class="sub">계정으로 로그인해주세요.</p>
+    <label for="authId">아이디</label>
+    <input type="text" id="authId" autocomplete="username" autofocus>
+    <label for="authPw">비밀번호</label>
+    <input type="password" id="authPw" autocomplete="current-password">
+    <button type="button" id="authSubmitBtn" class="btn-primary">로그인</button>
+    <div class="auth-error" id="authError" hidden></div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="firebase-init.js"></script>
+<script>
+window.addEventListener("DOMContentLoaded", function(){
+  var idInput = document.getElementById("authId");
+  var pwInput = document.getElementById("authPw");
+  var errBox = document.getElementById("authError");
+  var btn = document.getElementById("authSubmitBtn");
+
+  var params = new URLSearchParams(window.location.search);
+  var next = params.get("next") || "index.html";
+
+  if (dashIsUnlocked()){
+    window.location.href = next;
+    return;
+  }
+
+  function tryLogin(){
+    errBox.hidden = true;
+    btn.disabled = true;
+    var originalText = btn.textContent;
+    btn.textContent = "확인 중...";
+    firebase.firestore().collection("config").doc("gate").get().then(function(doc){
+      var data = doc.data() || {};
+      if (idInput.value.trim() === data.id && pwInput.value === data.pw){
+        dashSetUnlocked();
+        window.location.href = next;
+      } else {
+        errBox.textContent = "아이디 또는 비밀번호가 올바르지 않습니다.";
+        errBox.hidden = false;
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }
+    }).catch(function(err){
+      errBox.textContent = "확인 중 오류가 발생했습니다: " + err.message;
+      errBox.hidden = false;
+      btn.disabled = false;
+      btn.textContent = originalText;
+    });
+  }
+  btn.addEventListener("click", tryLogin);
+  pwInput.addEventListener("keydown", function(e){ if (e.key === "Enter") tryLogin(); });
+});
+</script>
+</body>
+</html>

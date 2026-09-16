@@ -9,6 +9,18 @@ var COLOR = { blue:"#1e3a5f", orange:"#c2612d", aqua:"#1baf7a", yellow:"#c98a1f"
 var BU_PALETTE_ORDER = [COLOR.blue,COLOR.orange,COLOR.aqua,COLOR.yellow,COLOR.magenta,COLOR.green,COLOR.violet,COLOR.red];
 var OTHER_GREY = "#94a3b8";
 
+/* 색상 보정: hex를 흰색/검정과 섞어 밝게/어둡게 만든다 (그라디언트·글로우용) */
+function mix(hex, targetHex, amt){
+  var h = hex.replace("#",""), t = targetHex.replace("#","");
+  var r1=parseInt(h.substr(0,2),16), g1=parseInt(h.substr(2,2),16), b1=parseInt(h.substr(4,2),16);
+  var r2=parseInt(t.substr(0,2),16), g2=parseInt(t.substr(2,2),16), b2=parseInt(t.substr(4,2),16);
+  var r=Math.round(r1+(r2-r1)*amt), g=Math.round(g1+(g2-g1)*amt), b=Math.round(b1+(b2-b1)*amt);
+  return "#"+[r,g,b].map(function(v){ return Math.max(0,Math.min(255,v)).toString(16).padStart(2,"0"); }).join("");
+}
+function lighten(hex, amt){ return mix(hex, "#ffffff", amt); }
+function darken(hex, amt){ return mix(hex, "#000000", amt); }
+var svgDefsUid = 0;
+
 var DIVISION_HUES = {
   "TKM": { dark: COLOR.blue, light: "#93b3d6" },
   "NEW": { dark: COLOR.orange, light: "#e3ab84" }
@@ -58,7 +70,13 @@ function attachTooltip(container){
 function showTooltip(e, text){
   var tip = document.getElementById("tooltip");
   tip.textContent = text; tip.hidden = false;
-  tip.style.left = (e.clientX+12)+"px"; tip.style.top = (e.clientY+12)+"px";
+  var margin = 12;
+  var tw = tip.offsetWidth, th = tip.offsetHeight;
+  var x = e.clientX + margin;
+  if (x + tw > window.innerWidth - 4) x = e.clientX - margin - tw;
+  var y = e.clientY + margin;
+  if (y + th > window.innerHeight - 4) y = e.clientY - margin - th;
+  tip.style.left = Math.max(4,x)+"px"; tip.style.top = Math.max(4,y)+"px";
 }
 function hideTooltip(){ document.getElementById("tooltip").hidden = true; }
 
@@ -89,7 +107,18 @@ function drawGroupedBars(container, categories, series, opts){
   var gap = 2;
   var barW = Math.min(22, (groupW - gap*(series.length+1))/series.length);
   barW = Math.max(barW, 2);
+  var uid = ++svgDefsUid;
   var svg = '<svg viewBox="0 0 '+width+' '+height+'" width="100%" height="'+height+'" role="img">';
+  svg += '<defs>';
+  svg += '<filter id="barShadow'+uid+'" x="-30%" y="-30%" width="160%" height="160%">'+
+    '<feDropShadow dx="0" dy="1.5" stdDeviation="1.6" flood-color="#0f172a" flood-opacity="0.16"/></filter>';
+  series.forEach(function(s, si){
+    svg += '<linearGradient id="barGrad'+uid+'-'+si+'" x1="0" y1="0" x2="0" y2="1">'+
+      '<stop offset="0%" stop-color="'+lighten(s.color,0.28)+'"/>'+
+      '<stop offset="55%" stop-color="'+s.color+'"/>'+
+      '<stop offset="100%" stop-color="'+darken(s.color,0.14)+'"/></linearGradient>';
+  });
+  svg += '</defs>';
   var steps = 4;
   for (var i=0;i<=steps;i++){
     var v = maxVal*i/steps;
@@ -112,8 +141,9 @@ function drawGroupedBars(container, categories, series, opts){
         var y = mT + yOf(Math.max(v,0));
         var h = Math.max(0, plotH - yOf(Math.max(v,0)));
         var tip = s.label+" · "+cat+": "+formatFull(v);
-        var dash = s.dashed ? ' stroke="'+s.color+'" stroke-width="1.5" stroke-dasharray="3,2" fill-opacity="0.55"' : '';
-        svg += '<rect class="bar" data-tip="'+escapeAttr(tip)+'" x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+barW.toFixed(1)+'" height="'+h.toFixed(1)+'" rx="3" fill="'+s.color+'"'+dash+'/>';
+        var dash = s.dashed ? ' stroke="'+s.color+'" stroke-width="1.5" stroke-dasharray="3,2" fill-opacity="0.55"' : ' filter="url(#barShadow'+uid+')"';
+        var fill = s.dashed ? s.color : 'url(#barGrad'+uid+'-'+si+')';
+        svg += '<rect class="bar" data-tip="'+escapeAttr(tip)+'" x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+barW.toFixed(1)+'" height="'+h.toFixed(1)+'" rx="3.5" fill="'+fill+'"'+dash+'/>';
       }
     });
     if (ci % labelStep === 0 || ci === categories.length-1){
@@ -145,7 +175,28 @@ function drawForecastChart(container, categories, actualSeries, forecastLine, ba
   var barW = Math.min(28, groupW*0.5);
   function cx(ci){ return mL + ci*groupW + groupW/2; }
 
+  var uid = ++svgDefsUid;
+  var bandColor = opts.bandColor||COLOR.violet;
   var svg = '<svg viewBox="0 0 '+width+' '+height+'" width="100%" height="'+height+'" role="img">';
+  svg += '<defs>'+
+    '<linearGradient id="bandGrad'+uid+'" x1="0" y1="0" x2="0" y2="1">'+
+      '<stop offset="0%" stop-color="'+bandColor+'" stop-opacity="0.22"/>'+
+      '<stop offset="50%" stop-color="'+bandColor+'" stop-opacity="0.07"/>'+
+      '<stop offset="100%" stop-color="'+bandColor+'" stop-opacity="0.22"/></linearGradient>'+
+    '<filter id="softBlur'+uid+'" x="-60%" y="-60%" width="220%" height="220%">'+
+      '<feGaussianBlur stdDeviation="3.2"/></filter>'+
+    '<filter id="lineGlow'+uid+'" x="-60%" y="-60%" width="220%" height="220%">'+
+      '<feGaussianBlur stdDeviation="2.4" result="blur"/>'+
+      '<feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>'+
+    '<radialGradient id="dotGlow'+uid+'"><stop offset="0%" stop-color="'+forecastLine.color+'" stop-opacity="0.55"/>'+
+      '<stop offset="100%" stop-color="'+forecastLine.color+'" stop-opacity="0"/></radialGradient>'+
+    '<filter id="barShadowF'+uid+'" x="-30%" y="-30%" width="160%" height="160%">'+
+      '<feDropShadow dx="0" dy="1.5" stdDeviation="1.6" flood-color="#0f172a" flood-opacity="0.16"/></filter>'+
+    '<linearGradient id="barGradF'+uid+'" x1="0" y1="0" x2="0" y2="1">'+
+      '<stop offset="0%" stop-color="'+lighten(actualSeries.color,0.28)+'"/>'+
+      '<stop offset="55%" stop-color="'+actualSeries.color+'"/>'+
+      '<stop offset="100%" stop-color="'+darken(actualSeries.color,0.14)+'"/></linearGradient>'+
+    '</defs>';
   var steps = 4;
   for (var i=0;i<=steps;i++){
     var v = maxVal*i/steps;
@@ -154,17 +205,24 @@ function drawForecastChart(container, categories, actualSeries, forecastLine, ba
     svg += '<text x="'+(mL-8)+'" y="'+(y+4)+'" text-anchor="end" font-size="11" fill="'+COLOR.muted+'">'+formatKRW(v)+'</text>';
   }
 
-  var bandPoints = [];
+  var topPts = [], botPts = [];
   categories.forEach(function(cat, ci){
     if (band.high[ci]==null) return;
-    bandPoints.push(cx(ci).toFixed(1)+','+(mT+yOf(band.high[ci])).toFixed(1));
+    topPts.push({ x:cx(ci), y:mT+yOf(band.high[ci]), v:band.high[ci], cat:cat });
   });
-  for (var cj=categories.length-1; cj>=0; cj--){
-    if (band.low[cj]==null) continue;
-    bandPoints.push(cx(cj).toFixed(1)+','+(mT+yOf(Math.max(band.low[cj],0))).toFixed(1));
-  }
+  categories.forEach(function(cat, ci){
+    if (band.low[ci]==null) return;
+    botPts.push({ x:cx(ci), y:mT+yOf(Math.max(band.low[ci],0)), v:Math.max(band.low[ci],0), cat:cat });
+  });
+  var bandPoints = topPts.map(function(p){ return p.x.toFixed(1)+','+p.y.toFixed(1); })
+    .concat(botPts.slice().reverse().map(function(p){ return p.x.toFixed(1)+','+p.y.toFixed(1); }));
   if (bandPoints.length>=4){
-    svg += '<polygon points="'+bandPoints.join(' ')+'" fill="'+(opts.bandColor||COLOR.violet)+'" opacity="0.16"/>';
+    svg += '<polygon points="'+bandPoints.join(' ')+'" fill="url(#bandGrad'+uid+')" filter="url(#softBlur'+uid+')"/>';
+    svg += '<polygon points="'+bandPoints.join(' ')+'" fill="url(#bandGrad'+uid+')"/>';
+    var topEdge = topPts.map(function(p,i){ return (i===0?'M':'L')+p.x.toFixed(1)+','+p.y.toFixed(1); }).join(' ');
+    var botEdge = botPts.map(function(p,i){ return (i===0?'M':'L')+p.x.toFixed(1)+','+p.y.toFixed(1); }).join(' ');
+    svg += '<path d="'+topEdge+'" fill="none" stroke="'+bandColor+'" stroke-width="1" stroke-opacity="0.4" stroke-linecap="round"/>';
+    svg += '<path d="'+botEdge+'" fill="none" stroke="'+bandColor+'" stroke-width="1" stroke-opacity="0.4" stroke-linecap="round"/>';
   }
 
   categories.forEach(function(cat, ci){
@@ -174,7 +232,7 @@ function drawForecastChart(container, categories, actualSeries, forecastLine, ba
     var y = mT + yOf(Math.max(v,0));
     var h = Math.max(0, plotH - yOf(Math.max(v,0)));
     var tip = actualSeries.label+" · "+cat+": "+formatFull(v);
-    svg += '<rect class="bar" data-tip="'+escapeAttr(tip)+'" x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+barW.toFixed(1)+'" height="'+h.toFixed(1)+'" rx="3" fill="'+actualSeries.color+'"/>';
+    svg += '<rect class="bar" data-tip="'+escapeAttr(tip)+'" x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+barW.toFixed(1)+'" height="'+h.toFixed(1)+'" rx="3.5" fill="url(#barGradF'+uid+')" filter="url(#barShadowF'+uid+')"/>';
   });
 
   var linePoints = [];
@@ -184,12 +242,25 @@ function drawForecastChart(container, categories, actualSeries, forecastLine, ba
   });
   if (linePoints.length){
     var pathD = linePoints.map(function(p,i){ return (i===0?'M':'L')+p.x.toFixed(1)+','+p.y.toFixed(1); }).join(' ');
-    svg += '<path d="'+pathD+'" fill="none" stroke="'+forecastLine.color+'" stroke-width="2.5" stroke-dasharray="6,3"/>';
+    svg += '<path d="'+pathD+'" fill="none" stroke="'+forecastLine.color+'" stroke-width="2.5" stroke-dasharray="6,3" stroke-linecap="round" filter="url(#lineGlow'+uid+')"/>';
     linePoints.forEach(function(p){
       var tip = forecastLine.label+" · "+p.cat+": "+formatFull(p.v);
-      svg += '<circle class="bar" data-tip="'+escapeAttr(tip)+'" cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="4" fill="'+forecastLine.color+'"/>';
+      svg += '<circle data-tip="'+escapeAttr(tip)+'" cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="11" fill="url(#dotGlow'+uid+')"/>';
+      svg += '<circle class="bar" data-tip="'+escapeAttr(tip)+'" cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="4" fill="'+forecastLine.color+'" stroke="#fff" stroke-width="1.2"/>';
     });
   }
+
+  /* 신뢰구간 상단/하단 경계에도 호버 포인트를 찍어 상향/하향 예측값을 바로 확인할 수 있게 한다 */
+  topPts.forEach(function(p){
+    var tip = "상향(95%) · "+p.cat+": "+formatFull(p.v);
+    svg += '<circle data-tip="'+escapeAttr(tip)+'" cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="9" fill="url(#dotGlow'+uid+')"/>';
+    svg += '<circle class="bar" data-tip="'+escapeAttr(tip)+'" cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="2.6" fill="'+lighten(bandColor,0.2)+'" stroke="#fff" stroke-width="1"/>';
+  });
+  botPts.forEach(function(p){
+    var tip = "하향(95%) · "+p.cat+": "+formatFull(p.v);
+    svg += '<circle data-tip="'+escapeAttr(tip)+'" cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="9" fill="url(#dotGlow'+uid+')"/>';
+    svg += '<circle class="bar" data-tip="'+escapeAttr(tip)+'" cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="2.6" fill="'+lighten(bandColor,0.2)+'" stroke="#fff" stroke-width="1"/>';
+  });
 
   var minLabelW = 34;
   var labelStep = Math.max(1, Math.ceil(categories.length * minLabelW / plotW));
@@ -412,13 +483,24 @@ function holtForecast(data, alpha, beta, phi, h){
   var res = data.slice(skip).map(function(d,i){ return d - fitted[i+skip]; });
   var rmse = res.length ? Math.sqrt(res.reduce(function(s,r){ return s+r*r; },0)/res.length) : 0;
 
+  /* 신뢰구간: ETS(A,Ad,N)(감쇠추세) h-step 예측분산 공식(FPP3 8장) 사용.
+     sigma_h^2 = rmse^2 * [1 + sum_{j=1..h-1} (alpha + beta*phiCum_j)^2],
+     phiCum_j = phi + phi^2 + ... + phi^j. */
   var fc = [], ciLow=[], ciHigh=[];
-  var phiCum = 0;
+  var phiCumArr = [];
+  var pc = 0;
+  for (var i=1; i<=h; i++){ pc += Math.pow(phi,i); phiCumArr.push(pc); }
+
+  var varSum = 1;
   for (var k=1; k<=h; k++){
-    phiCum += Math.pow(phi,k);
-    var val = Math.max(0, L + phiCum*T);
+    var phiCumK = phiCumArr[k-1];
+    var val = Math.max(0, L + phiCumK*T);
     fc.push(val);
-    var band = 1.96*rmse*Math.sqrt(k);
+    if (k>1){
+      var theta = alpha + beta*phiCumArr[k-2];
+      varSum += theta*theta;
+    }
+    var band = 1.96*rmse*Math.sqrt(varSum);
     ciLow.push(Math.max(0, val-band));
     ciHigh.push(val+band);
   }
