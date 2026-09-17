@@ -18,8 +18,14 @@
     --good:#10b981; --critical:#e0526b; --warnbg:#fff8e8; --warnborder:#f0d685;
     --tkm-tint:#eef6f6; --new-tint:#eef2fd;
     --accent1:#3ca3f9; --accent2:#3b6fe0; --shadow:0 2px 14px rgba(45,55,110,.07);
+    --ease-load:cubic-bezier(0.65,0,0.35,1); /* 저속-고속-저속: 시작은 천천히, 중간에 가속, 끝은 다시 부드럽게 정착 */
   }
   *{box-sizing:border-box;}
+  @keyframes donutFadeIn{ from{ opacity:0; transform:scale(.85); } to{ opacity:1; transform:scale(1); } }
+  @keyframes barGrowV{ from{ transform:scaleY(0); } to{ transform:scaleY(1); } }
+  @keyframes segGrowH{ from{ transform:scaleX(0); } to{ transform:scaleX(1); } }
+  .donut-fade{ transform-box:fill-box; transform-origin:center; animation:donutFadeIn .6s var(--ease-load) .22s both; }
+  .bar-grow-v{ transform-box:fill-box; transform-origin:50% 100%; animation:barGrowV .68s var(--ease-load) both; }
   html,body{margin:0;padding:0;background:var(--page);color:var(--ink);
     font-family:"Pretendard Variable","Pretendard",system-ui,-apple-system,"Segoe UI","Malgun Gothic",sans-serif;
     font-size:13.5px;line-height:1.45;}
@@ -146,7 +152,7 @@
   /* ---- 품목 구성비중 하단: NEW:TKM 비중을 얇은 막대 하나로 심플하게 ---- */
   .division-ratio{margin-top:16px;}
   .division-ratio-bar{display:flex;height:6px;border-radius:3px;overflow:hidden;background:var(--surface-2);}
-  .division-ratio-bar .seg{height:100%;}
+  .division-ratio-bar .seg{height:100%;transform-origin:0 50%;animation:segGrowH .68s var(--ease-load) both;}
   .division-ratio-label{display:flex;justify-content:space-between;margin-top:6px;
     font-size:10.5px;color:var(--ink-2);font-weight:600;}
   .sub-card{border:1px solid var(--border);border-radius:12px;padding:12px 14px;background:var(--surface);}

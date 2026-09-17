@@ -57,6 +57,40 @@ function monthKeyLabel(mk){
 
 function sum(rows, key){ return rows.reduce(function(a,r){ return a + (Number(r[key])||0); }, 0); }
 
+/* ---------- 새로고침/필터 적용 시 숫자 카운트업 애니메이션 ----------
+   CSS 쪽(도넛 회전, 바 성장)과 동일한 "저속-고속-저속" 곡선(--ease-load,
+   cubic-bezier(0.65,0,0.35,1))을 그대로 재현해서, 숫자가 올라가는 속도감이
+   그래프 모션과 어긋나지 않게 맞춘다. */
+function makeBezierEasing(mX1, mY1, mX2, mY2){
+  function A(a1,a2){ return 1-3*a2+3*a1; }
+  function B(a1,a2){ return 3*a2-6*a1; }
+  function C(a1){ return 3*a1; }
+  function calcBezier(t,a1,a2){ return ((A(a1,a2)*t+B(a1,a2))*t+C(a1))*t; }
+  function getSlope(t,a1,a2){ return 3*A(a1,a2)*t*t+2*B(a1,a2)*t+C(a1); }
+  function getTForX(x){
+    var t = x;
+    for (var i=0;i<8;i++){
+      var diff = calcBezier(t,mX1,mX2)-x;
+      var slope = getSlope(t,mX1,mX2);
+      if (Math.abs(slope) < 1e-6) break;
+      t -= diff/slope;
+    }
+    return t;
+  }
+  return function(x){ return calcBezier(getTForX(x), mY1, mY2); };
+}
+var easeLoad = makeBezierEasing(0.65, 0, 0.35, 1);
+
+function animateNumber(el, target, duration, formatFn){
+  var start = performance.now();
+  function tick(now){
+    var t = Math.min(1, (now-start)/duration);
+    el.textContent = formatFn(target*easeLoad(t));
+    if (t < 1) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
 /* ---------- 차트: 공통 ---------- */
 function attachTooltip(container){
   container.querySelectorAll("[data-tip]").forEach(function(el){
@@ -140,7 +174,7 @@ function drawGroupedBars(container, categories, series, opts){
         var tip = s.label+" · "+cat+": "+formatFull(v);
         var dash = s.dashed ? ' stroke="'+s.color+'" stroke-width="1.5" stroke-dasharray="3,2" fill-opacity="0.55"' : ' filter="url(#barShadow'+uid+')"';
         var fill = s.dashed ? s.color : 'url(#barGrad'+uid+'-'+si+')';
-        svg += '<rect class="bar" data-tip="'+escapeAttr(tip)+'" x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+barW.toFixed(1)+'" height="'+h.toFixed(1)+'" rx="3.5" fill="'+fill+'"'+dash+'/>';
+        svg += '<rect class="bar bar-grow-v" data-tip="'+escapeAttr(tip)+'" x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+barW.toFixed(1)+'" height="'+h.toFixed(1)+'" rx="3.5" fill="'+fill+'"'+dash+'/>';
       }
     });
     if (ci % labelStep === 0 || ci === categories.length-1){
@@ -229,7 +263,7 @@ function drawForecastChart(container, categories, actualSeries, forecastLine, ba
     var y = mT + yOf(Math.max(v,0));
     var h = Math.max(0, plotH - yOf(Math.max(v,0)));
     var tip = actualSeries.label+" · "+cat+": "+formatFull(v);
-    svg += '<rect class="bar" data-tip="'+escapeAttr(tip)+'" x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+barW.toFixed(1)+'" height="'+h.toFixed(1)+'" rx="3.5" fill="url(#barGradF'+uid+')" filter="url(#barShadowF'+uid+')"/>';
+    svg += '<rect class="bar bar-grow-v" data-tip="'+escapeAttr(tip)+'" x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+barW.toFixed(1)+'" height="'+h.toFixed(1)+'" rx="3.5" fill="url(#barGradF'+uid+')" filter="url(#barShadowF'+uid+')"/>';
   });
 
   var linePoints = [];
@@ -317,12 +351,17 @@ function drawDonut(container, items){
     var tip = it.label+" · "+(frac*100).toFixed(1)+"% · "+formatFull(it.value);
     svg += '<circle class="bar" data-tip="'+escapeAttr(tip)+'" cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="url(#donutGrad'+uid+'-'+i+')"'+
       ' stroke-width="'+thickness+'" stroke-dasharray="'+segLen.toFixed(2)+' '+(circumference-segLen).toFixed(2)+
-      '" stroke-dashoffset="'+(-offset).toFixed(2)+'" transform="rotate(-90 '+cx+' '+cy+')" filter="url(#donutShadow'+uid+')"/>';
+      '" stroke-dashoffset="'+(-offset).toFixed(2)+'" transform="rotate(-90 '+cx+' '+cy+')" filter="url(#donutShadow'+uid+')">'+
+      '<animate attributeName="stroke-dasharray" from="0 '+circumference.toFixed(2)+'" to="'+segLen.toFixed(2)+' '+(circumference-segLen).toFixed(2)+
+      '" dur="0.72s" fill="freeze" calcMode="spline" keyTimes="0;1" keySplines="0.65 0 0.35 1"/>'+
+      '</circle>';
     offset += frac*circumference;
   });
   var top = segs[0];
+  svg += '<g class="donut-fade">';
   svg += '<text x="'+cx+'" y="'+(cy-4)+'" text-anchor="middle" font-size="17" font-weight="700" fill="'+COLOR.ink+'">'+(top.value/total*100).toFixed(0)+'%</text>';
   svg += '<text x="'+cx+'" y="'+(cy+15)+'" text-anchor="middle" font-size="10.5" fill="'+COLOR.muted+'">'+escapeHtml(top.label)+'</text>';
+  svg += '</g>';
   svg += '</svg>';
   container.innerHTML = svg;
   attachTooltip(container);
@@ -450,9 +489,9 @@ function opRateOf(rows){
 function renderKPI(rows, divisions, periodLabel){
   var box = document.getElementById("kpiRow");
   function tileHtml(t){
-    var valueText = formatKRW(t.value) + (t.rate!=null ? ' <span class="kpi-rate">('+t.rate.toFixed(0)+'%)</span>' : '');
+    var rateHtml = t.rate!=null ? ' <span class="kpi-rate">('+t.rate.toFixed(0)+'%)</span>' : '';
     return '<div class="kpi-tile"><div class="kpi-label">'+escapeHtml(t.label)+'</div>'+
-      '<div class="kpi-value">'+valueText+'</div>'+
+      '<div class="kpi-value"><span class="kpi-num" data-target="'+t.value+'">0</span>'+rateHtml+'</div>'+
       '<div class="kpi-note">'+t.note+'</div></div>';
   }
   var groups = divisions.map(function(d){
@@ -477,6 +516,9 @@ function renderKPI(rows, divisions, periodLabel){
       '<div class="kpi-division-row">'+totalTiles.map(tileHtml).join("")+'</div></div>');
   }
   box.innerHTML = groups.join("");
+  box.querySelectorAll(".kpi-num[data-target]").forEach(function(el){
+    animateNumber(el, Number(el.getAttribute("data-target"))||0, 900, formatKRW);
+  });
 }
 
 /* ================================================================
@@ -702,16 +744,20 @@ function renderForecast(){
   var growth = lastActual ? ((lastForecast/lastActual-1)*100) : 0;
 
   var kpis = [
-    { label: futureKeys[futureKeys.length-1]+" 예측", value: formatKRW(lastForecast)+"원", sub: "95% 구간 "+formatKRW(lastBandLow)+" ~ "+formatKRW(lastBandHigh) },
-    { label: effH+"개월 합계 예측", value: formatKRW(horizonSum)+"원", sub: monthKeyLabel(futureKeys[0])+" ~ "+monthKeyLabel(futureKeys[futureKeys.length-1]) },
-    { label: "최근월 대비 증감", value: (growth>=0?"+":"")+growth.toFixed(1)+"%", sub: monthKeyLabel(lastKey)+" 실측 대비" },
-    { label: "수출 비중(환율 영향분)", value: (exportRatio*100).toFixed(1)+"%", sub: "A사向 매출 기준" }
+    { label: futureKeys[futureKeys.length-1]+" 예측", raw: lastForecast, fmt: function(v){ return formatKRW(v)+"원"; }, sub: "95% 구간 "+formatKRW(lastBandLow)+" ~ "+formatKRW(lastBandHigh) },
+    { label: effH+"개월 합계 예측", raw: horizonSum, fmt: function(v){ return formatKRW(v)+"원"; }, sub: monthKeyLabel(futureKeys[0])+" ~ "+monthKeyLabel(futureKeys[futureKeys.length-1]) },
+    { label: "최근월 대비 증감", raw: growth, fmt: function(v){ return (v>=0?"+":"")+v.toFixed(1)+"%"; }, sub: monthKeyLabel(lastKey)+" 실측 대비" },
+    { label: "수출 비중(환율 영향분)", raw: exportRatio*100, fmt: function(v){ return v.toFixed(1)+"%"; }, sub: "A사向 매출 기준" }
   ];
-  document.getElementById("forecastKPI").innerHTML = kpis.map(function(k){
+  document.getElementById("forecastKPI").innerHTML = kpis.map(function(k, i){
     return '<div class="fc-kpi"><div class="fc-kpi-label">'+escapeHtml(k.label)+'</div>'+
-      '<div class="fc-kpi-value">'+escapeHtml(k.value)+'</div>'+
+      '<div class="fc-kpi-value" data-idx="'+i+'">'+escapeHtml(k.fmt(0))+'</div>'+
       '<div class="fc-kpi-sub">'+escapeHtml(k.sub)+'</div></div>';
   }).join("");
+  document.querySelectorAll('#forecastKPI .fc-kpi-value[data-idx]').forEach(function(el){
+    var k = kpis[Number(el.getAttribute("data-idx"))];
+    animateNumber(el, k.raw, 900, k.fmt);
+  });
 
   /* 산출 근거 — 예측값이 감이 아니라 방정식과 실제 대입값에서 나왔음을
      그대로 보여준다. 정확도보다 "왜 이 숫자인지 설명 가능한가"가 핵심. */
