@@ -142,6 +142,13 @@
   .drill-division-label{font-size:10.5px;font-weight:800;letter-spacing:.02em;margin-bottom:10px;color:var(--ink-2);}
   .drill-division-pair{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
   @media (max-width:640px){ .drill-division-pair{grid-template-columns:1fr;} }
+
+  /* ---- 품목 구성비중 하단: NEW:TKM 비중을 얇은 막대 하나로 심플하게 ---- */
+  .division-ratio{margin-top:16px;}
+  .division-ratio-bar{display:flex;height:6px;border-radius:3px;overflow:hidden;background:var(--surface-2);}
+  .division-ratio-bar .seg{height:100%;}
+  .division-ratio-label{display:flex;justify-content:space-between;margin-top:6px;
+    font-size:10.5px;color:var(--ink-2);font-weight:600;}
   .sub-card{border:1px solid var(--border);border-radius:12px;padding:12px 14px;background:var(--surface);}
   .sub-card h3{font-size:11px;font-weight:700;color:var(--ink-2);margin:0 0 6px;}
   .sub-card.donut-card{display:flex;flex-direction:column;align-items:center;text-align:center;}
@@ -265,6 +272,7 @@
   <section class="chart-card" id="buChartCard">
     <div class="card-head"><h2>품목 구성비중</h2><span class="sub">중분류 → 소분류 · 선택 기간 기준</span></div>
     <div class="drill-grid" id="drillGrid"></div>
+    <div class="division-ratio" id="divisionRatio" hidden></div>
   </section>
 
   <section class="chart-card" id="monthlyChartCard">

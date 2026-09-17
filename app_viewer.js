@@ -720,6 +720,29 @@ function renderAll(){
     drawDonut(document.getElementById("subChart-"+d), subItems);
   });
 
+  /* 품목 구성비중 하단: 사업부문이 둘 이상일 때만 NEW:TKM 매출 비중을
+     얇은 막대 하나로 심플하게 보여준다. */
+  var ratioBox = document.getElementById("divisionRatio");
+  if (divisions.length > 1){
+    var ratioData = divisions.map(function(d){
+      return { d:d, v:sum(periodRows.filter(function(r){ return r.division===d; }), "totalRevenue") };
+    });
+    var ratioTotal = ratioData.reduce(function(s,x){ return s+x.v; }, 0);
+    ratioBox.hidden = false;
+    ratioBox.innerHTML =
+      '<div class="division-ratio-bar">'+ratioData.map(function(x){
+        var pct = ratioTotal>0 ? (x.v/ratioTotal*100) : 0;
+        var hue = DIVISION_HUES[x.d] || { dark: COLOR.accent };
+        return '<div class="seg" style="width:'+pct.toFixed(2)+'%;background:'+hue.dark+';"></div>';
+      }).join("")+'</div>'+
+      '<div class="division-ratio-label">'+ratioData.map(function(x){
+        var pct = ratioTotal>0 ? (x.v/ratioTotal*100) : 0;
+        return escapeHtml(x.d)+' '+pct.toFixed(0)+'%';
+      }).join(" : ")+'</div>';
+  } else {
+    ratioBox.hidden = true;
+  }
+
   FC_ROWS = periodRows;
   FC_MONTH_KEYS = Array.from(new Set(periodRows.map(function(r){ return r.monthKey; }))).sort();
   FC_DIVISION_LABEL = f.division !== "__ALL__" ? f.division : null;

@@ -186,6 +186,13 @@
   .drill-division-label{font-size:10.5px;font-weight:800;letter-spacing:.02em;margin-bottom:10px;color:var(--ink-2);}
   .drill-division-pair{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
   @media (max-width:640px){ .drill-division-pair{grid-template-columns:1fr;} }
+
+  /* ---- 품목 구성비중 하단: NEW:TKM 비중을 얇은 막대 하나로 심플하게 ---- */
+  .division-ratio{margin-top:16px;}
+  .division-ratio-bar{display:flex;height:6px;border-radius:3px;overflow:hidden;background:var(--surface-2);}
+  .division-ratio-bar .seg{height:100%;}
+  .division-ratio-label{display:flex;justify-content:space-between;margin-top:6px;
+    font-size:10.5px;color:var(--ink-2);font-weight:600;}
   .sub-card{border:1px solid var(--border);border-radius:12px;padding:12px 14px;background:var(--surface);}
   .sub-card h3{font-size:11px;font-weight:700;color:var(--ink-2);margin:0 0 6px;}
   .sub-card.donut-card{display:flex;flex-direction:column;align-items:center;text-align:center;}
@@ -320,6 +327,7 @@
   <section class="chart-card" id="buChartCard" hidden>
     <div class="card-head"><h2>품목 구성비중</h2><span class="sub">중분류 → 소분류 · 선택 기간 기준</span></div>
     <div class="drill-grid" id="drillGrid"></div>
+    <div class="division-ratio" id="divisionRatio" hidden></div>
   </section>
 
   <section class="chart-card" id="monthlyChartCard" hidden>
@@ -1307,6 +1315,29 @@ function renderAll(){
     drawDonut(document.getElementById("midChart-"+d), midItems);
     drawDonut(document.getElementById("subChart-"+d), subItems);
   });
+
+  /* 품목 구성비중 하단: 사업부문이 둘 이상일 때만 NEW:TKM 매출 비중을
+     얇은 막대 하나로 심플하게 보여준다. */
+  var ratioBox = document.getElementById("divisionRatio");
+  if (divisions.length > 1){
+    var ratioData = divisions.map(function(d){
+      return { d:d, v:sum(periodRows.filter(function(r){ return r.division===d; }), "totalRevenue") };
+    });
+    var ratioTotal = ratioData.reduce(function(s,x){ return s+x.v; }, 0);
+    ratioBox.hidden = false;
+    ratioBox.innerHTML =
+      '<div class="division-ratio-bar">'+ratioData.map(function(x){
+        var pct = ratioTotal>0 ? (x.v/ratioTotal*100) : 0;
+        var hue = DIVISION_HUES[x.d] || { dark: COLOR.accent };
+        return '<div class="seg" style="width:'+pct.toFixed(2)+'%;background:'+hue.dark+';"></div>';
+      }).join("")+'</div>'+
+      '<div class="division-ratio-label">'+ratioData.map(function(x){
+        var pct = ratioTotal>0 ? (x.v/ratioTotal*100) : 0;
+        return escapeHtml(x.d)+' '+pct.toFixed(0)+'%';
+      }).join(" : ")+'</div>';
+  } else {
+    ratioBox.hidden = true;
+  }
 
   FC_ROWS = periodRows;
   FC_MONTH_KEYS = Array.from(new Set(periodRows.map(function(r){ return r.monthKey; }))).sort();
