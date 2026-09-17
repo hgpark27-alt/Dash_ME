@@ -64,8 +64,7 @@
 </div>
 
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
 <script src="firebase-init.js"></script>
 <script>
 window.addEventListener("DOMContentLoaded", function(){
@@ -87,8 +86,8 @@ window.addEventListener("DOMContentLoaded", function(){
     btn.disabled = true;
     var originalText = btn.textContent;
     btn.textContent = "확인 중...";
-    firebase.firestore().collection("config").doc("gate").get().then(function(doc){
-      var data = doc.data() || {};
+    dashRef("config/gate").once("value").then(function(snap){
+      var data = snap.val() || {};
       if (idInput.value.trim() === data.id && pwInput.value === data.pw){
         dashSetUnlocked();
         window.location.href = next;

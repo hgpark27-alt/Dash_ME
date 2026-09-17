@@ -1,26 +1,25 @@
-/* Firebase 프로젝트 설정 (manage.html / list.html / view.html 공용)
-   - Firebase Auth는 화면에 노출되지 않는 익명 로그인으로 항상 자동 처리한다.
-   - 화면에 보이는 아이디/비밀번호 입력은 Firestore의 config/gate 문서 값과
-     클라이언트에서 단순 대조하는 "앱 접근 자물쇠"이며, Firebase 로그인과는 무관하다. */
+/* Firebase 설정 (manage.html / index.html / view.html 공용)
+   - Realtime Database 사용(더미 데이터 단계 — 인증 없이 즉시 읽고 쓴다).
+   - 기존 게임 프로젝트(thegoodgame-3b670)의 이미 만들어진 무료 RTDB 인스턴스를
+     경로만 분리해서(salesDashboard/...) 재사용한다. 실데이터가 들어가면
+     별도 프로젝트/인증 방식으로 다시 분리하는 것을 검토해야 한다.
+   - 화면에 보이는 아이디/비밀번호는 DB의 salesDashboard/config/gate 값과
+     클라이언트에서 단순 대조하는 "앱 접근 자물쇠"일 뿐이다. */
 var firebaseConfig = {
-  apiKey: "AIzaSyDu9d4ZgGPce2Dg-iMEHW_-SbMMNCmo9-M",
-  authDomain: "dashme-pnl.firebaseapp.com",
-  projectId: "dashme-pnl",
-  storageBucket: "dashme-pnl.firebasestorage.app",
-  messagingSenderId: "538136012438",
-  appId: "1:538136012438:web:fd524b51a5262b4fec84b7"
+  apiKey: "AIzaSyAk2XHcSiKQyWXImGZGfA-kXSI5pwEqtoU",
+  authDomain: "thegoodgame-3b670.firebaseapp.com",
+  databaseURL: "https://thegoodgame-3b670-default-rtdb.firebaseio.com",
+  projectId: "thegoodgame-3b670",
+  storageBucket: "thegoodgame-3b670.firebasestorage.app",
+  messagingSenderId: "321525181369",
+  appId: "1:321525181369:web:10e533051aa3149e89e468"
 };
 firebase.initializeApp(firebaseConfig);
-/* onAuthStateChanged로 기존 세션 복원을 먼저 기다린 뒤, 세션이 전혀 없을 때만
-   새로 익명 로그인한다 — 매번 무조건 호출하면 이미 로그인된 상태에서도
-   불필요한 네트워크 왕복(약 300ms)이 매 페이지 로드마다 발생한다. */
-firebase.auth().onAuthStateChanged(function(user){
-  if (!user){
-    firebase.auth().signInAnonymously().catch(function(err){
-      console.error("Firebase 익명 로그인 실패", err);
-    });
-  }
-});
+
+var DASH_ROOT = "salesDashboard";
+function dashRef(path){
+  return firebase.database().ref(DASH_ROOT + (path ? "/" + path : ""));
+}
 
 var APP_GATE_KEY = "dashGateOk";
 

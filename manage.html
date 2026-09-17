@@ -387,8 +387,7 @@ n.strs.push(s);Un(r.wbrels,-1,"sharedStrings."+t,Pn.SST)}s="xl/workbook."+t;Qr(i
 </script>
 
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
 <script src="firebase-init.js"></script>
 <script>
 (function(){
@@ -1436,25 +1435,21 @@ function performSaveVersion(rows){
   var originalRowCount = rows.length;
   var compressed = compressRows(rows);
   var months = Array.from(new Set(compressed.map(function(r){ return r.monthKey; }))).sort();
-  var CHUNK = 2000;
-  var chunks = [];
-  for (var i=0;i<compressed.length;i+=CHUNK) chunks.push(compressed.slice(i, i+CHUNK));
-  var db = firebase.firestore();
-  var versionRef = db.collection("versions").doc();
+  /* 목록(versionsMeta)은 가볍게, 실제 데이터(versionsData)는 따로 저장해서
+     홈 화면 목록을 열 때 무거운 레코드 배열까지 안 받아오게 한다. */
+  var versionId = dashRef("versionsMeta").push().key;
   var meta = {
-    savedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    savedAt: firebase.database.ServerValue.TIMESTAMP,
     monthFrom: months[0] || null,
     monthTo: months[months.length-1] || null,
     rowCount: originalRowCount,
     recordCount: compressed.length,
-    chunkCount: chunks.length,
     createdBy: "admin"
   };
-  versionRef.set(meta).then(function(){
-    return Promise.all(chunks.map(function(chunk, idx){
-      return versionRef.collection("chunks").doc(String(idx)).set({ rows: chunk });
-    }));
-  }).then(function(){
+  Promise.all([
+    dashRef("versionsMeta/"+versionId).set(meta),
+    dashRef("versionsData/"+versionId).set({ records: compressed })
+  ]).then(function(){
     statusEl.className = "save-status ok";
     statusEl.textContent = "저장 완료 (원본 "+originalRowCount.toLocaleString()+"행 → 압축 "+compressed.length.toLocaleString()+"건)";
     btn.disabled = false;
