@@ -8,14 +8,16 @@
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.css">
 <style>
   :root{
-    --page:#f4f5fb; --surface:#ffffff; --surface-2:#f7f8fd;
+    --page:radial-gradient(1100px 520px at 10% -10%, rgba(60,163,249,.08), transparent 60%),
+      linear-gradient(180deg, #f8f9fc 0%, #edf0f6 100%);
+    --surface:#ffffff; --surface-2:#f7f8fd;
     --ink:#1c2333; --ink-2:#5b6478; --muted:#8890a3;
     --grid:#edeef7; --axis:#dcdfef; --border:#e7e9f4;
     --blue:#3b6fe0; --orange:#14b8a6; --aqua:#14b8a6; --yellow:#f0b429;
     --magenta:#a855c9; --green:#10b981; --violet:#6d5ce8; --red:#e0526b;
     --good:#10b981; --critical:#e0526b; --warnbg:#fff8e8; --warnborder:#f0d685;
     --tkm-tint:#eef6f6; --new-tint:#eef2fd;
-    --accent1:#6d5ce8; --accent2:#3b6fe0; --shadow:0 2px 14px rgba(45,55,110,.07);
+    --accent1:#3ca3f9; --accent2:#3b6fe0; --shadow:0 2px 14px rgba(45,55,110,.07);
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;background:var(--page);color:var(--ink);
@@ -55,7 +57,7 @@
     background:rgba(255,255,255,.55);
     -webkit-backdrop-filter:blur(16px) saturate(180%);backdrop-filter:blur(16px) saturate(180%);
     border:1px solid rgba(255,255,255,.7);border-radius:16px;padding:18px 16px 16px;
-    box-shadow:0 8px 28px rgba(76,66,180,.14), inset 0 1px 0 rgba(255,255,255,.6);
+    box-shadow:0 8px 28px rgba(60,163,249,.14), inset 0 1px 0 rgba(255,255,255,.6);
     transition:box-shadow .2s ease;}
   .filter-sidebar::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;
     background:linear-gradient(90deg,var(--accent1),var(--accent2));opacity:.85;}
@@ -69,7 +71,7 @@
   .filter-group label{font-size:11px;color:var(--ink-2);font-weight:600;}
   .filter-group select{font-size:11.5px;padding:5px 6px;border:1px solid var(--border);
     border-radius:6px;background:#fff;color:var(--ink);width:100%;}
-  .filter-group select:focus{outline:none;border-color:var(--accent1);box-shadow:0 0 0 3px rgba(109,92,232,.14);}
+  .filter-group select:focus{outline:none;border-color:var(--accent1);box-shadow:0 0 0 3px rgba(60,163,249,.14);}
   .filter-meta{font-size:11px;color:var(--muted);padding-top:10px;border-top:1px dashed var(--border);}
   .period-group{gap:6px;}
   .period-presets{display:flex;gap:4px;flex-wrap:wrap;}
@@ -79,9 +81,9 @@
   .period-btn.active{background:var(--accent1);color:#fff;border-color:var(--accent1);}
   .period-sep{color:var(--muted);font-size:11px;text-align:center;}
   .period-group select{font-size:11.5px;padding:5px 6px;border:1px solid var(--border);border-radius:6px;}
-  .filter-sidebar .btn-ghost{width:100%;color:var(--accent1);border-color:rgba(109,92,232,.35);
-    background:rgba(109,92,232,.05);}
-  .filter-sidebar .btn-ghost:hover{background:rgba(109,92,232,.13);}
+  .filter-sidebar .btn-ghost{width:100%;color:var(--accent1);border-color:rgba(60,163,249,.35);
+    background:rgba(60,163,249,.05);}
+  .filter-sidebar .btn-ghost:hover{background:rgba(60,163,249,.13);}
   @media (max-width:1100px){
     .layout-row{flex-direction:column;padding:0;}
     .page{padding:20px 28px 28px;}
@@ -266,7 +268,7 @@
   </section>
 
   <section class="chart-card" id="monthlyChartCard">
-    <div class="card-head"><h2>월별 매출총액 추이 · 예측</h2><span class="sub">사업부문 통합 · 95% 예측구간 포함</span></div>
+    <div class="card-head"><h2>월별 매출총액 추이 · 예측</h2><span class="sub" id="monthlyChartSub">사업부문 통합 · 95% 예측구간 포함</span></div>
     <div class="fc-layout">
       <div class="fc-main">
         <div class="chart-body" id="forecastChart"></div>
@@ -274,14 +276,6 @@
       </div>
       <div class="fc-tool">
         <div class="fc-tool-title">예측 설정</div>
-        <div class="fc-group">
-          <span class="fc-group-label">대상</span>
-          <div class="seg-group" id="fcDivisionSeg">
-            <button type="button" class="seg-btn" data-val="TKM">TKM</button>
-            <button type="button" class="seg-btn" data-val="NEW">NEW</button>
-            <button type="button" class="seg-btn active" data-val="ALL">합산</button>
-          </div>
-        </div>
         <div class="fc-group">
           <span class="fc-group-label">예측 개월</span>
           <div class="fc-slider-row">

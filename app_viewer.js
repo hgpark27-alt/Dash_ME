@@ -3,7 +3,7 @@
 "use strict";
 
 var COLOR = { blue:"#3b6fe0", orange:"#14b8a6", aqua:"#14b8a6", yellow:"#f0b429",
-  magenta:"#a855c9", green:"#10b981", violet:"#6d5ce8", red:"#e0526b",
+  magenta:"#a855c9", green:"#10b981", violet:"#6d5ce8", red:"#e0526b", accent:"#3ca3f9",
   ink:"#1c2333", ink2:"#5b6478", muted:"#8890a3", grid:"#edeef7", axis:"#dcdfef" };
 
 var BU_PALETTE_ORDER = [COLOR.blue,COLOR.violet,COLOR.orange,COLOR.magenta,COLOR.yellow,COLOR.green,COLOR.red,"#4c5fd5"];
@@ -554,19 +554,22 @@ function holtForecast(data, alpha, beta, phi, h){
    α·β·φ 같은 통계 용어를 직접 만지는 대신, 이해할 수 있는 축(대상 사업부문 /
    예측 개월 / 환율 변동률)만 조절한다. */
 var FORECAST_PARAMS = { phi:0.9 };
-var FC = { division:"ALL", horizon:3, fxChange:0 };
+var FC = { horizon:3, fxChange:0 };
 
-function forecastSeries(division){
-  var rows = ALL_ROWS;
-  if (division !== "ALL") rows = rows.filter(function(r){ return r.division===division; });
-  return monthlyAgg(rows, MONTH_KEYS).map(function(m){ return m.value; });
+/* 상단 필터(사업부문/중분류/기간)로 걸러진 행·월 목록. renderAll()이 매번
+   갱신하고, 예측도 이 걸러진 데이터를 그대로 대상으로 삼는다 — 화면에 보이는
+   실적과 다른 모집단으로 예측하면 앞뒤가 안 맞기 때문. */
+var FC_ROWS = [];
+var FC_MONTH_KEYS = [];
+var FC_DIVISION_LABEL = null; // "TKM" | "NEW" | null(전체/복수 합산)
+
+function forecastSeries(rows, monthKeys){
+  return monthlyAgg(rows, monthKeys).map(function(m){ return m.value; });
 }
 
-/* 사업부문별 수출 비중 — U열(거래처명)이 정확히 A사인
-   매출만 환율 영향을 받는 수출분으로 본다 (그 외 국내거래처 포함 전부 국내). */
-function exportRatioOf(division){
-  var rows = ALL_ROWS;
-  if (division !== "ALL") rows = rows.filter(function(r){ return r.division===division; });
+/* 수출 비중 — U열(거래처명)이 정확히 A사인 매출만 환율 영향을 받는
+   수출분으로 본다 (그 외 국내거래처 포함 전부 국내). */
+function exportRatioOf(rows){
   var total = sum(rows, "totalRevenue");
   if (total <= 0) return 0;
   var exportSum = sum(rows.filter(function(r){ return r.isExport; }), "totalRevenue");
@@ -575,7 +578,11 @@ function exportRatioOf(division){
 
 function renderForecast(){
   var card = document.getElementById("forecastCard");
-  if (MONTH_KEYS.length < 3){
+  var monthKeys = FC_MONTH_KEYS;
+  var rows = FC_ROWS;
+  var subEl = document.getElementById("monthlyChartSub");
+  if (subEl) subEl.textContent = (FC_DIVISION_LABEL || "사업부문 통합") + " · 95% 예측구간 포함";
+  if (monthKeys.length < 3){
     card.hidden = true;
     document.getElementById("forecastChart").innerHTML = '<p class="empty-state">예측에는 최소 3개월치 데이터가 필요합니다.</p>';
     document.getElementById("forecastKPI").innerHTML = "";
@@ -583,7 +590,7 @@ function renderForecast(){
   }
   card.hidden = false;
 
-  var data = forecastSeries(FC.division);
+  var data = forecastSeries(rows, monthKeys);
   var fitted = fitHoltParams(data, FORECAST_PARAMS.phi);
   var result = holtForecast(data, fitted.alpha, fitted.beta, FORECAST_PARAMS.phi, FC.horizon);
   if (!result){
@@ -593,7 +600,7 @@ function renderForecast(){
   }
 
   var futureKeys = [];
-  var lastKey = MONTH_KEYS[MONTH_KEYS.length-1];
+  var lastKey = monthKeys[monthKeys.length-1];
   var y = parseInt(lastKey.slice(0,4),10), m = parseInt(lastKey.slice(5,7),10);
   for (var i=0;i<FC.horizon;i++){
     m++; if (m>12){ m=1; y++; }
@@ -602,19 +609,19 @@ function renderForecast(){
 
   /* 환율 변동 반영: 수출 비중만큼만 환율 변동률을 곱해서 보정한다.
      adj = 1 + 수출비중 × (환율변동률/100) */
-  var exportRatio = exportRatioOf(FC.division);
+  var exportRatio = exportRatioOf(rows);
   var fxAdj = 1 + exportRatio * (FC.fxChange/100);
   var forecastAdj = result.forecast.map(function(v){ return Math.max(0, v*fxAdj); });
 
-  var hue = FC.division==="TKM" ? DIVISION_HUES.TKM : FC.division==="NEW" ? DIVISION_HUES.NEW : { dark:COLOR.violet, light:"#c9c0ec" };
-  var categories = MONTH_KEYS.concat(futureKeys).map(monthKeyLabel);
+  var hue = FC_DIVISION_LABEL==="TKM" ? DIVISION_HUES.TKM : FC_DIVISION_LABEL==="NEW" ? DIVISION_HUES.NEW : { dark:COLOR.accent, light:lighten(COLOR.accent,0.45) };
+  var categories = monthKeys.concat(futureKeys).map(monthKeyLabel);
   var actualValues = data.concat(futureKeys.map(function(){ return null; }));
-  var forecastValues = MONTH_KEYS.map(function(){ return null; }).concat(forecastAdj);
-  var bandLow = MONTH_KEYS.map(function(){ return null; }).concat(result.ciLow.map(function(v){ return Math.max(0, v*fxAdj); }));
-  var bandHigh = MONTH_KEYS.map(function(){ return null; }).concat(result.ciHigh.map(function(v){ return v*fxAdj; }));
+  var forecastValues = monthKeys.map(function(){ return null; }).concat(forecastAdj);
+  var bandLow = monthKeys.map(function(){ return null; }).concat(result.ciLow.map(function(v){ return Math.max(0, v*fxAdj); }));
+  var bandHigh = monthKeys.map(function(){ return null; }).concat(result.ciHigh.map(function(v){ return v*fxAdj; }));
 
   drawForecastChart(document.getElementById("forecastChart"), categories,
-    { label:(FC.division==="ALL"?"합산":FC.division)+" 실측", color:hue.dark, values:actualValues },
+    { label:(FC_DIVISION_LABEL||"합산")+" 실측", color:hue.dark, values:actualValues },
     { label:"예측", color:hue.dark, values:forecastValues },
     { low:bandLow, high:bandHigh },
     { height:260, bandColor:hue.dark }
@@ -661,19 +668,6 @@ function renderForecast(){
 }
 
 function initForecastControls(){
-  function seg(id, key, after){
-    document.querySelectorAll("#"+id+" .seg-btn").forEach(function(btn){
-      btn.addEventListener("click", function(){
-        document.querySelectorAll("#"+id+" .seg-btn").forEach(function(b){ b.classList.remove("active"); });
-        btn.classList.add("active");
-        FC[key] = btn.getAttribute("data-val");
-        if (after) after();
-        renderForecast();
-      });
-    });
-  }
-  seg("fcDivisionSeg", "division");
-
   function slider(id, key, fmt){
     var el = document.getElementById(id);
     var val = document.getElementById(id+"V");
@@ -726,6 +720,9 @@ function renderAll(){
     drawDonut(document.getElementById("subChart-"+d), subItems);
   });
 
+  FC_ROWS = periodRows;
+  FC_MONTH_KEYS = Array.from(new Set(periodRows.map(function(r){ return r.monthKey; }))).sort();
+  FC_DIVISION_LABEL = f.division !== "__ALL__" ? f.division : null;
   renderForecast();
 }
 
