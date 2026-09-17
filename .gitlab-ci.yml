@@ -1,5 +1,7 @@
 pages:
   stage: deploy
+  tags:
+    - prod
   script:
     - mkdir -p public
     - cp index.html login.html manage.html view.html app_viewer.js firebase-init.js public/
