@@ -427,36 +427,33 @@ window.addEventListener("DOMContentLoaded", function(){
 
   appGate(function(){
     var db = firebase.firestore();
+    var versionRef = db.collection("versions").doc(versionId);
     document.getElementById("headerMeta").textContent = "버전 정보를 불러오는 중...";
-    db.collection("versions").doc(versionId).get().then(function(doc){
+    /* 메타 문서를 먼저 읽고 나서야 청크를 읽던 직렬(순차) 방식을 없애고,
+       청크는 컬렉션 전체를 한 번에 쿼리해서 메타 문서와 동시에(병렬) 가져온다.
+       왕복 횟수가 청크 개수와 무관하게 항상 2회(동시)로 고정된다. */
+    Promise.all([
+      versionRef.get(),
+      versionRef.collection("chunks").get()
+    ]).then(function(results){
+      var doc = results[0], chunksSnap = results[1];
       if (!doc.exists){
         document.getElementById("headerMeta").textContent = "존재하지 않는 버전입니다.";
         return;
       }
       var meta = doc.data();
-      var chunkCount = meta.chunkCount || 0;
-      var chunkPromises = [];
-      for (var i=0;i<chunkCount;i++){
-        chunkPromises.push(versionRefChunk(db, versionId, i));
-      }
-      return Promise.all(chunkPromises).then(function(chunkDocs){
-        var rows = [];
-        chunkDocs.forEach(function(cd){ rows = rows.concat(cd.data().rows); });
-        var savedAtStr = meta.savedAt && meta.savedAt.toDate ? meta.savedAt.toDate().toLocaleString("ko-KR") : "";
-        document.getElementById("versionTitle").textContent =
-          "TKM · NEW 손익 현황 리포트 ("+(meta.monthFrom||"")+"~"+(meta.monthTo||"")+")";
-        document.getElementById("headerMeta").textContent =
-          "저장 "+savedAtStr+" · "+(meta.createdBy||"")+" · "+(meta.rowCount||rows.length).toLocaleString()+"행";
-        seedReportData(rows);
-      });
+      var rows = [];
+      chunksSnap.forEach(function(cd){ rows = rows.concat(cd.data().rows); });
+      var savedAtStr = meta.savedAt && meta.savedAt.toDate ? meta.savedAt.toDate().toLocaleString("ko-KR") : "";
+      document.getElementById("versionTitle").textContent =
+        "TKM · NEW 손익 현황 리포트 ("+(meta.monthFrom||"")+"~"+(meta.monthTo||"")+")";
+      document.getElementById("headerMeta").textContent =
+        "저장 "+savedAtStr+" · "+(meta.createdBy||"")+" · "+(meta.rowCount||rows.length).toLocaleString()+"행";
+      seedReportData(rows);
     }).catch(function(err){
       document.getElementById("headerMeta").textContent = "불러오기 실패: "+err.message;
     });
   });
-
-  function versionRefChunk(db, versionId, idx){
-    return db.collection("versions").doc(versionId).collection("chunks").doc(String(idx)).get();
-  }
 });
 </script>
 
