@@ -207,7 +207,7 @@
   .footer{margin-top:24px;padding-top:14px;border-top:1px solid var(--grid);
     font-size:10.5px;color:var(--muted);text-align:right;}
   .tooltip{position:fixed;z-index:50;background:var(--ink);color:#fff;font-size:12px;
-    padding:6px 10px;border-radius:5px;pointer-events:none;max-width:260px;white-space:nowrap;}
+    padding:6px 10px;border-radius:5px;pointer-events:none;max-width:260px;white-space:normal;line-height:1.4;}
 
 
   /* ---- 예측 시뮬레이션 ---- */
@@ -736,13 +736,13 @@ function drawForecastChart(container, categories, actualSeries, forecastLine, ba
   var linePoints = [];
   categories.forEach(function(cat, ci){
     if (forecastLine.values[ci]==null) return;
-    linePoints.push({ x:cx(ci), y:mT+yOf(Math.max(forecastLine.values[ci],0)), v:forecastLine.values[ci], cat:cat });
+    linePoints.push({ x:cx(ci), y:mT+yOf(Math.max(forecastLine.values[ci],0)), v:forecastLine.values[ci], cat:cat, ci:ci });
   });
   if (linePoints.length){
     var pathD = linePoints.map(function(p,i){ return (i===0?'M':'L')+p.x.toFixed(1)+','+p.y.toFixed(1); }).join(' ');
     svg += '<path d="'+pathD+'" fill="none" stroke="'+forecastLine.color+'" stroke-width="2.5" stroke-dasharray="6,3" stroke-linecap="round" filter="url(#lineGlow'+uid+')"/>';
     linePoints.forEach(function(p){
-      var tip = forecastLine.label+" · "+p.cat+": "+formatFull(p.v);
+      var tip = (forecastLine.tips && forecastLine.tips[p.ci]) || (forecastLine.label+" · "+p.cat+": "+formatFull(p.v));
       svg += '<circle data-tip="'+escapeAttr(tip)+'" cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="11" fill="url(#dotGlow'+uid+')"/>';
       svg += '<circle class="bar" data-tip="'+escapeAttr(tip)+'" cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="4" fill="'+forecastLine.color+'" stroke="#fff" stroke-width="1.2"/>';
     });
@@ -1247,9 +1247,26 @@ function renderForecast(){
   var bandLow = monthKeys.map(function(){ return null; }).concat(result.ciLow.map(function(v){ return Math.max(0, v*fxAdj); }));
   var bandHigh = monthKeys.map(function(){ return null; }).concat(result.ciHigh.map(function(v){ return v*fxAdj; }));
 
+  /* 예측 포인트에 마우스를 올리면 "왜 이 숫자인지"를 문장으로 바로 보여준다. */
+  var phiCumArrTip = [];
+  var pcAccTip = 0;
+  for (var pci=1; pci<=effH; pci++){ pcAccTip += Math.pow(FORECAST_PARAMS.phi, pci); phiCumArrTip.push(pcAccTip); }
+  var forecastTips = futureKeys.map(function(fk, i){
+    var phiCumK = phiCumArrTip[i];
+    var deseasonVal = result.level + phiCumK*result.trend;
+    var mm = fk.slice(5,7);
+    var parts = [];
+    if (seasonalIdx) parts.push("계절지수 "+seasonalIdx[mm].toFixed(2)+"배 반영");
+    if (FC.fxChange !== 0) parts.push("환율 "+(FC.fxChange>=0?"+":"")+FC.fxChange+"%(수출비중 "+(exportRatio*100).toFixed(0)+"%) 반영");
+    var tail = parts.length ? "이 "+parts.join(", ")+"해서" : "이";
+    return monthKeyLabel(fk)+" 예측 — 현재 수준 "+formatKRW(result.level)+"원에 월 추세 "+formatKRW(result.trend)+
+      "원을 "+phiCumK.toFixed(2)+"배(감쇠누적, "+(i+1)+"개월째) 반영한 값"+tail+" "+formatKRW(forecastAdj[i])+"원입니다.";
+  });
+  var forecastTipsFull = monthKeys.map(function(){ return null; }).concat(forecastTips);
+
   drawForecastChart(document.getElementById("forecastChart"), categories,
     { label:(FC_DIVISION_LABEL||"합산")+" 실측", color:hue.dark, values:actualValues },
-    { label:"예측", color:hue.dark, values:forecastValues },
+    { label:"예측", color:hue.dark, values:forecastValues, tips:forecastTipsFull },
     { low:bandLow, high:bandHigh },
     { height:260, bandColor:hue.dark }
   );

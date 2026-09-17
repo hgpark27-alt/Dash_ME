@@ -235,13 +235,13 @@ function drawForecastChart(container, categories, actualSeries, forecastLine, ba
   var linePoints = [];
   categories.forEach(function(cat, ci){
     if (forecastLine.values[ci]==null) return;
-    linePoints.push({ x:cx(ci), y:mT+yOf(Math.max(forecastLine.values[ci],0)), v:forecastLine.values[ci], cat:cat });
+    linePoints.push({ x:cx(ci), y:mT+yOf(Math.max(forecastLine.values[ci],0)), v:forecastLine.values[ci], cat:cat, ci:ci });
   });
   if (linePoints.length){
     var pathD = linePoints.map(function(p,i){ return (i===0?'M':'L')+p.x.toFixed(1)+','+p.y.toFixed(1); }).join(' ');
     svg += '<path d="'+pathD+'" fill="none" stroke="'+forecastLine.color+'" stroke-width="2.5" stroke-dasharray="6,3" stroke-linecap="round" filter="url(#lineGlow'+uid+')"/>';
     linePoints.forEach(function(p){
-      var tip = forecastLine.label+" · "+p.cat+": "+formatFull(p.v);
+      var tip = (forecastLine.tips && forecastLine.tips[p.ci]) || (forecastLine.label+" · "+p.cat+": "+formatFull(p.v));
       svg += '<circle data-tip="'+escapeAttr(tip)+'" cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="11" fill="url(#dotGlow'+uid+')"/>';
       svg += '<circle class="bar" data-tip="'+escapeAttr(tip)+'" cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="4" fill="'+forecastLine.color+'" stroke="#fff" stroke-width="1.2"/>';
     });
@@ -670,9 +670,26 @@ function renderForecast(){
   var bandLow = monthKeys.map(function(){ return null; }).concat(result.ciLow.map(function(v){ return Math.max(0, v*fxAdj); }));
   var bandHigh = monthKeys.map(function(){ return null; }).concat(result.ciHigh.map(function(v){ return v*fxAdj; }));
 
+  /* 예측 포인트에 마우스를 올리면 "왜 이 숫자인지"를 문장으로 바로 보여준다. */
+  var phiCumArrTip = [];
+  var pcAccTip = 0;
+  for (var pci=1; pci<=effH; pci++){ pcAccTip += Math.pow(FORECAST_PARAMS.phi, pci); phiCumArrTip.push(pcAccTip); }
+  var forecastTips = futureKeys.map(function(fk, i){
+    var phiCumK = phiCumArrTip[i];
+    var deseasonVal = result.level + phiCumK*result.trend;
+    var mm = fk.slice(5,7);
+    var parts = [];
+    if (seasonalIdx) parts.push("계절지수 "+seasonalIdx[mm].toFixed(2)+"배 반영");
+    if (FC.fxChange !== 0) parts.push("환율 "+(FC.fxChange>=0?"+":"")+FC.fxChange+"%(수출비중 "+(exportRatio*100).toFixed(0)+"%) 반영");
+    var tail = parts.length ? "이 "+parts.join(", ")+"해서" : "이";
+    return monthKeyLabel(fk)+" 예측 — 현재 수준 "+formatKRW(result.level)+"원에 월 추세 "+formatKRW(result.trend)+
+      "원을 "+phiCumK.toFixed(2)+"배(감쇠누적, "+(i+1)+"개월째) 반영한 값"+tail+" "+formatKRW(forecastAdj[i])+"원입니다.";
+  });
+  var forecastTipsFull = monthKeys.map(function(){ return null; }).concat(forecastTips);
+
   drawForecastChart(document.getElementById("forecastChart"), categories,
     { label:(FC_DIVISION_LABEL||"합산")+" 실측", color:hue.dark, values:actualValues },
-    { label:"예측", color:hue.dark, values:forecastValues },
+    { label:"예측", color:hue.dark, values:forecastValues, tips:forecastTipsFull },
     { low:bandLow, high:bandHigh },
     { height:260, bandColor:hue.dark }
   );
@@ -865,6 +882,73 @@ function populatePrintFilters(){
   toSel.value = MONTH_KEYS.indexOf(mainF.to)!==-1 ? mainF.to : MONTH_KEYS[MONTH_KEYS.length-1];
 }
 
+/* 인쇄용 월별 매출총액 추이 미니차트 — 인터랙티브 차트의 글로우/그림자 없이
+   가볍게(잉크절약 흑백에서도 선명하게) 막대+예측선+구간만 그린다. */
+function buildPrintTrendSVG(monthKeys, actualVals, futureKeys, forecastVals, bandLow, bandHigh, color, mono){
+  var W = 680, H = 130, mL=44, mR=8, mT=8, mB=16;
+  var plotW = W-mL-mR, plotH = H-mT-mB;
+  var allMonths = monthKeys.concat(futureKeys || []);
+  var allVals = actualVals.concat(bandHigh || forecastVals || []).filter(function(v){ return v!=null; });
+  var maxVal = Math.max.apply(null, allVals.concat([1])) * 1.15;
+  var n = allMonths.length;
+  var stepX = n ? plotW/n : plotW;
+  function xOf(i){ return mL + i*stepX + stepX/2; }
+  function yOf(v){ return mT + plotH - (Math.max(v,0)/maxVal)*plotH; }
+
+  var barColor = mono ? "#888888" : color;
+  var lineColor = mono ? "#333333" : color;
+  var bandColor = mono ? "#aaaaaa" : color;
+
+  var svg = '<svg viewBox="0 0 '+W+' '+H+'" width="100%" height="'+H+'">';
+  svg += '<line x1="'+mL+'" x2="'+(W-mR)+'" y1="'+(mT+plotH)+'" y2="'+(mT+plotH)+'" stroke="#dcdfef" stroke-width="1"/>';
+
+  if (bandLow && bandHigh){
+    var topPts = [], botPts = [];
+    futureKeys.forEach(function(fk, i){
+      if (bandHigh[i]==null) return;
+      topPts.push(xOf(monthKeys.length+i).toFixed(1)+','+yOf(bandHigh[i]).toFixed(1));
+    });
+    futureKeys.forEach(function(fk, i){
+      if (bandLow[i]==null) return;
+      botPts.push(xOf(monthKeys.length+i).toFixed(1)+','+yOf(bandLow[i]).toFixed(1));
+    });
+    if (topPts.length && botPts.length){
+      svg += '<polygon points="'+topPts.concat(botPts.reverse()).join(' ')+'" fill="'+bandColor+'" opacity="'+(mono?0.15:0.16)+'"/>';
+    }
+  }
+
+  actualVals.forEach(function(v, i){
+    if (v==null) return;
+    var bw = stepX*0.5;
+    var x = xOf(i)-bw/2;
+    var y = yOf(v);
+    var h = (mT+plotH)-y;
+    svg += '<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+h.toFixed(1)+'" fill="'+barColor+'" '+
+      (mono ? 'stroke="#333" stroke-width="1"' : 'opacity="0.85"')+'/>';
+  });
+
+  if (forecastVals && futureKeys && futureKeys.length){
+    var lastActualIdx = actualVals.length-1;
+    var d = 'M'+xOf(lastActualIdx).toFixed(1)+','+yOf(actualVals[lastActualIdx]).toFixed(1);
+    futureKeys.forEach(function(fk, i){
+      d += ' L'+xOf(monthKeys.length+i).toFixed(1)+','+yOf(forecastVals[i]).toFixed(1);
+    });
+    svg += '<path d="'+d+'" fill="none" stroke="'+lineColor+'" stroke-width="1.8" stroke-dasharray="4,2"/>';
+    futureKeys.forEach(function(fk, i){
+      svg += '<circle cx="'+xOf(monthKeys.length+i).toFixed(1)+'" cy="'+yOf(forecastVals[i]).toFixed(1)+'" r="2.2" fill="'+lineColor+'"/>';
+    });
+  }
+
+  var labelStep = Math.max(1, Math.ceil(n/8));
+  allMonths.forEach(function(mk, i){
+    if (i%labelStep===0 || i===n-1){
+      svg += '<text x="'+xOf(i).toFixed(1)+'" y="'+(H-2)+'" font-size="7" text-anchor="middle" fill="#5b6478">'+escapeHtml(monthKeyLabel(mk))+'</text>';
+    }
+  });
+  svg += '</svg>';
+  return svg;
+}
+
 function renderPrintPage(){
   var pf = currentPrintFilters();
   var rows = ALL_ROWS.filter(function(r){
@@ -912,8 +996,9 @@ function renderPrintPage(){
       (barsHtml || '<p class="empty-state" style="font-size:9px;">데이터 없음</p>')+'</div>';
   }).join("");
 
-  var forecastHtml = "", formulaHtml = "";
+  var forecastHtml = "", formulaHtml = "", chartFutureKeys = null, chartForecastAdj = null, chartBandLow = null, chartBandHigh = null;
   var fcMonthKeys = Array.from(new Set(rows.map(function(r){ return r.monthKey; }))).sort();
+  var monthlyActual = monthlyAgg(rows, fcMonthKeys).map(function(mo){ return mo.value; });
   if ((PP.includeForecast || PP.includeFormula) && fcMonthKeys.length>=3){
     var data = forecastSeries(rows, fcMonthKeys);
     var effH = effectiveHorizon(fcMonthKeys.length, FC.horizon);
@@ -928,14 +1013,19 @@ function renderPrintPage(){
       for (var i=0;i<effH;i++){ m++; if (m>12){ m=1; y++; } futureKeys.push(y+"-"+String(m).padStart(2,"0")); }
       if (seasonalIdx2){
         result.forecast = result.forecast.map(function(v,i){ return v*seasonalIdx2[futureKeys[i].slice(5,7)]; });
+        result.ciLow = result.ciLow.map(function(v,i){ return v*seasonalIdx2[futureKeys[i].slice(5,7)]; });
+        result.ciHigh = result.ciHigh.map(function(v,i){ return v*seasonalIdx2[futureKeys[i].slice(5,7)]; });
       }
       var exportRatio = exportRatioOf(rows);
       var fxAdj = 1 + exportRatio*(FC.fxChange/100);
       var forecastAdj = result.forecast.map(function(v){ return Math.max(0, v*fxAdj); });
       var lastForecast = forecastAdj[forecastAdj.length-1];
       var horizonSum = forecastAdj.reduce(function(a,b){ return a+b; },0);
-
       if (PP.includeForecast){
+        chartFutureKeys = futureKeys;
+        chartForecastAdj = forecastAdj;
+        chartBandLow = result.ciLow.map(function(v){ return Math.max(0, v*fxAdj); });
+        chartBandHigh = result.ciHigh.map(function(v){ return v*fxAdj; });
         forecastHtml = '<div class="pp-section"><div class="pp-section-title">예측 ('+effH+'개월)</div>'+
           '<div class="pp-kpi-grid">'+
           '<div class="pp-kpi"><div class="pp-kpi-label">'+monthKeyLabel(futureKeys[futureKeys.length-1])+' 예측</div>'+
@@ -964,6 +1054,10 @@ function renderPrintPage(){
     }
   }
 
+  var trendColor = FC_DIVISION_LABEL==="TKM" ? DIVISION_HUES.TKM.dark : FC_DIVISION_LABEL==="NEW" ? DIVISION_HUES.NEW.dark : COLOR.accent;
+  var trendSvg = buildPrintTrendSVG(fcMonthKeys, monthlyActual, chartFutureKeys, chartForecastAdj, chartBandLow, chartBandHigh, trendColor, mono);
+  var chartHtml = '<div class="pp-section"><div class="pp-section-title">월별 매출총액 추이'+(chartForecastAdj?" · 예측":"")+'</div>'+trendSvg+'</div>';
+
   var page = document.getElementById("printPage");
   page.className = "print-page"+(PP.orient==="landscape" ? " landscape" : "")+(mono ? " mono" : "");
   page.innerHTML =
@@ -971,6 +1065,7 @@ function renderPrintPage(){
     '<div class="pp-meta">조회기간 '+escapeHtml(periodLabel)+' · 사업부문 '+escapeHtml(pf.division==="__ALL__"?"전체":pf.division)+
     ' · 중분류 '+escapeHtml(pf.mid==="__ALL__"?"전체":pf.mid)+'<br>생성일 '+new Date().toLocaleDateString("ko-KR")+'</div></div>'+
     '<div class="pp-section"><div class="pp-section-title">누적 실적 지표</div><div class="pp-kpi-grid">'+kpiHtml+'</div></div>'+
+    chartHtml+
     '<div class="pp-section"><div class="pp-cols">'+compHtml+'</div></div>'+
     forecastHtml+formulaHtml+
     '<div class="pp-footer">다차원 손익현황(S) 기준 · 예측은 참고용, 검토 필요 · 본 문서는 자동 생성된 요약본입니다.</div>';
