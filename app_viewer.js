@@ -507,6 +507,42 @@ function fitHoltParams(data, phi){
   return { alpha:bestAlpha, beta:bestBeta };
 }
 
+/* 계절/패턴 지수 — 최소 12개월 이상 쌓였을 때만 월별 계절지수를 추정해서
+   추세 성분과 분리한다(데이터가 1년 미만이면 추정 자체가 불안정하므로
+   적용하지 않는다 = 전부 1). 이렇게 분리한 뒤 추세만 홀트 평활에 태우고,
+   예측값은 다시 계절지수를 곱해 되돌린다. */
+function computeSeasonalIndex(monthKeys, values){
+  if (monthKeys.length < 12) return null;
+  var mean = values.reduce(function(a,b){ return a+b; }, 0) / values.length;
+  if (mean <= 0) return null;
+  var byMonth = {};
+  monthKeys.forEach(function(mk, i){
+    var mm = mk.slice(5,7);
+    (byMonth[mm] = byMonth[mm] || []).push(values[i]/mean);
+  });
+  var idx = {};
+  for (var mo=1; mo<=12; mo++){
+    var key = String(mo).padStart(2,"0");
+    var arr = byMonth[key];
+    idx[key] = arr && arr.length ? arr.reduce(function(a,b){ return a+b; },0)/arr.length : 1;
+  }
+  var idxMean = Object.keys(idx).reduce(function(s,k){ return s+idx[k]; }, 0) / 12;
+  Object.keys(idx).forEach(function(k){
+    /* 데이터가 짧아 특정 달이 1~2개 표본뿐이면 지수가 과도하게 튈 수 있어
+       ±30%로 완충한다. */
+    idx[k] = Math.max(0.7, Math.min(1.3, idx[k]/idxMean));
+  });
+  return idx;
+}
+
+/* 과거 데이터가 짧을수록 먼 미래로 갈수록 예측구간이 나팔처럼 급격히
+   벌어지므로, 보유 개월수의 절반을 넘는 horizon은 신뢰도가 떨어진다고
+   보고 자동으로 줄인다(사용자가 슬라이더로 6개월을 선택해도 데이터가
+   4개월뿐이면 2개월까지만 보여준다). */
+function effectiveHorizon(monthCount, requestedHorizon){
+  return Math.max(1, Math.min(requestedHorizon, Math.ceil(monthCount/2)));
+}
+
 function holtForecast(data, alpha, beta, phi, h){
   var n = data.length;
   if (n < 2) return null;
@@ -581,7 +617,6 @@ function renderForecast(){
   var monthKeys = FC_MONTH_KEYS;
   var rows = FC_ROWS;
   var subEl = document.getElementById("monthlyChartSub");
-  if (subEl) subEl.textContent = (FC_DIVISION_LABEL || "사업부문 통합") + " · 95% 예측구간 포함";
   if (monthKeys.length < 3){
     card.hidden = true;
     document.getElementById("forecastChart").innerHTML = '<p class="empty-state">예측에는 최소 3개월치 데이터가 필요합니다.</p>';
@@ -591,20 +626,35 @@ function renderForecast(){
   card.hidden = false;
 
   var data = forecastSeries(rows, monthKeys);
-  var fitted = fitHoltParams(data, FORECAST_PARAMS.phi);
-  var result = holtForecast(data, fitted.alpha, fitted.beta, FORECAST_PARAMS.phi, FC.horizon);
-  if (!result){
-    document.getElementById("forecastChart").innerHTML = '<p class="empty-state">예측에 필요한 데이터가 부족합니다.</p>';
-    document.getElementById("forecastKPI").innerHTML = "";
-    return;
+  var effH = effectiveHorizon(monthKeys.length, FC.horizon);
+  if (subEl){
+    subEl.textContent = (FC_DIVISION_LABEL || "사업부문 통합") + " · 95% 예측구간 포함"+
+      (effH < FC.horizon ? " · 데이터가 짧아 예측 "+effH+"개월로 자동 조정" : "");
   }
 
   var futureKeys = [];
   var lastKey = monthKeys[monthKeys.length-1];
   var y = parseInt(lastKey.slice(0,4),10), m = parseInt(lastKey.slice(5,7),10);
-  for (var i=0;i<FC.horizon;i++){
+  for (var i=0;i<effH;i++){
     m++; if (m>12){ m=1; y++; }
     futureKeys.push(y+"-"+String(m).padStart(2,"0"));
+  }
+
+  /* 계절/패턴 지수를 분리한 뒤 추세만 홀트 평활에 태우고, 예측이 나오면
+     다시 계절지수를 곱해 되돌린다(데이터 1년 미만이면 지수는 전부 1). */
+  var seasonalIdx = computeSeasonalIndex(monthKeys, data);
+  var deseason = seasonalIdx ? data.map(function(v,i){ return v/seasonalIdx[monthKeys[i].slice(5,7)]; }) : data;
+  var fitted = fitHoltParams(deseason, FORECAST_PARAMS.phi);
+  var result = holtForecast(deseason, fitted.alpha, fitted.beta, FORECAST_PARAMS.phi, effH);
+  if (!result){
+    document.getElementById("forecastChart").innerHTML = '<p class="empty-state">예측에 필요한 데이터가 부족합니다.</p>';
+    document.getElementById("forecastKPI").innerHTML = "";
+    return;
+  }
+  if (seasonalIdx){
+    result.forecast = result.forecast.map(function(v,i){ return v*seasonalIdx[futureKeys[i].slice(5,7)]; });
+    result.ciLow = result.ciLow.map(function(v,i){ return v*seasonalIdx[futureKeys[i].slice(5,7)]; });
+    result.ciHigh = result.ciHigh.map(function(v,i){ return v*seasonalIdx[futureKeys[i].slice(5,7)]; });
   }
 
   /* 환율 변동 반영: 수출 비중만큼만 환율 변동률을 곱해서 보정한다.
@@ -636,7 +686,7 @@ function renderForecast(){
 
   var kpis = [
     { label: futureKeys[futureKeys.length-1]+" 예측", value: formatKRW(lastForecast)+"원", sub: "95% 구간 "+formatKRW(lastBandLow)+" ~ "+formatKRW(lastBandHigh) },
-    { label: FC.horizon+"개월 합계 예측", value: formatKRW(horizonSum)+"원", sub: monthKeyLabel(futureKeys[0])+" ~ "+monthKeyLabel(futureKeys[futureKeys.length-1]) },
+    { label: effH+"개월 합계 예측", value: formatKRW(horizonSum)+"원", sub: monthKeyLabel(futureKeys[0])+" ~ "+monthKeyLabel(futureKeys[futureKeys.length-1]) },
     { label: "최근월 대비 증감", value: (growth>=0?"+":"")+growth.toFixed(1)+"%", sub: monthKeyLabel(lastKey)+" 실측 대비" },
     { label: "수출 비중(환율 영향분)", value: (exportRatio*100).toFixed(1)+"%", sub: "A사向 매출 기준" }
   ];
@@ -649,18 +699,20 @@ function renderForecast(){
   /* 산출 근거 — 예측값이 감이 아니라 방정식과 실제 대입값에서 나왔음을
      그대로 보여준다. 정확도보다 "왜 이 숫자인지 설명 가능한가"가 핵심. */
   var phiSumH = 0;
-  for (var pk=1; pk<=FC.horizon; pk++) phiSumH += Math.pow(FORECAST_PARAMS.phi, pk);
+  for (var pk=1; pk<=effH; pk++) phiSumH += Math.pow(FORECAST_PARAMS.phi, pk);
   var fxPct = exportRatio*100 * (FC.fxChange/100);
   var formulaRows = [
     ["방법", "Holt 지수평활법(감쇠추세) · FPP3(Hyndman) 표준기법"],
     ["추정식", "Y(t+h) = L + (φ+φ²+...+φʰ)·T"],
-    ["현재 수준 L", formatKRW(result.level)+"원"],
+    ["계절/패턴 지수", seasonalIdx ? "월별 계절지수 반영 (12개월 이상 데이터 확보)" : "미반영 (12개월 미만 — 추정 불안정)"],
+    ["예측 개월", effH+"개월"+(effH<FC.horizon ? " (선택 "+FC.horizon+"개월 → 데이터 길이의 절반로 자동 축소)" : "")],
+    ["현재 수준 L", formatKRW(result.level)+"원"+(seasonalIdx?" (계절조정)":"")],
     ["월별 추세 T", formatKRW(result.trend)+"원/월"],
     ["평활 계수 α, β", "α="+fitted.alpha.toFixed(2)+", β="+fitted.beta.toFixed(2)+" (과거 실적 오차 최소화로 자동 적합)"],
-    ["감쇠계수 φ", FORECAST_PARAMS.phi.toFixed(2)+" (h="+FC.horizon+" 합 Σφᵏ = "+phiSumH.toFixed(2)+")"],
+    ["감쇠계수 φ", FORECAST_PARAMS.phi.toFixed(2)+" (h="+effH+" 합 Σφᵏ = "+phiSumH.toFixed(2)+")"],
     ["환율 반영식", "Y_조정 = Y × (1 + 수출비중 × Δ환율%)"],
     ["대입값", "수출비중 "+(exportRatio*100).toFixed(1)+"% × 환율 "+(FC.fxChange>=0?"+":"")+FC.fxChange+"% = 보정 "+(fxPct>=0?"+":"")+fxPct.toFixed(2)+"%p"],
-    ["모델 적합오차(RMSE)", formatKRW(result.rmse)+"원 (과거 실적 대비)"]
+    ["모델 적합오차(RMSE)", formatKRW(result.rmse)+"원 (계절조정 후 과거 실적 대비)"]
   ];
   document.getElementById("fcFormula").innerHTML = '<div class="fc-formula-title">산출 근거</div><table>'+
     formulaRows.map(function(r){ return '<tr><td>'+escapeHtml(r[0])+'</td><td>'+escapeHtml(r[1])+'</td></tr>'; }).join("")+
@@ -765,12 +817,229 @@ function seedReportData(rows){
 }
 window.seedReportData = seedReportData;
 
+/* ================================================================
+   인쇄 미리보기 — A4 한 페이지 요약. 인터랙티브 화면과 별개로
+   자체 필터(사업부문/중분류/기간)와 옵션(가로세로/컬러흑백/포함항목)을
+   가지며, 실제 프린터로 넘기기 전 눈으로 확인하는 모달이다.
+   ================================================================ */
+var PP = { orient:"portrait", mono:false, includeForecast:true, includeFormula:true };
+
+function currentPrintFilters(){
+  var fromSel = document.getElementById("printFrom");
+  var toSel = document.getElementById("printTo");
+  var from = fromSel.value, to = toSel.value;
+  if (from > to){ var t=from; from=to; to=t; }
+  return { division: document.getElementById("printDivision").value,
+    mid: document.getElementById("printMid").value, from:from, to:to };
+}
+
+function refreshPrintMidOptions(){
+  var divSel = document.getElementById("printDivision");
+  var midSel = document.getElementById("printMid");
+  var prevMid = midSel.value;
+  var scopeRows = divSel.value==="__ALL__" ? ALL_ROWS : ALL_ROWS.filter(function(r){ return r.division===divSel.value; });
+  var mids = Array.from(new Set(scopeRows.map(function(r){ return r.midCategory; }).filter(Boolean))).sort();
+  midSel.innerHTML = ['<option value="__ALL__">전체</option>'].concat(mids.map(function(m){
+    return '<option value="'+escapeAttr(m)+'">'+escapeHtml(m)+'</option>';
+  })).join("");
+  if (mids.indexOf(prevMid)!==-1) midSel.value = prevMid;
+}
+
+function populatePrintFilters(){
+  var mainF = currentFilters();
+  var divSel = document.getElementById("printDivision");
+  var divisions = Array.from(new Set(ALL_ROWS.map(function(r){ return r.division; }))).sort();
+  divSel.innerHTML = ['<option value="__ALL__">전체</option>'].concat(divisions.map(function(d){
+    return '<option value="'+escapeAttr(d)+'">'+escapeHtml(d)+'</option>';
+  })).join("");
+  divSel.value = divisions.indexOf(mainF.division)!==-1 ? mainF.division : "__ALL__";
+  refreshPrintMidOptions();
+  var midSel = document.getElementById("printMid");
+  if (Array.from(midSel.options).some(function(o){ return o.value===mainF.mid; })) midSel.value = mainF.mid;
+
+  var fromSel = document.getElementById("printFrom");
+  var toSel = document.getElementById("printTo");
+  var opts = MONTH_KEYS.map(function(mk){ return '<option value="'+mk+'">'+monthKeyLabel(mk)+'</option>'; }).join("");
+  fromSel.innerHTML = opts; toSel.innerHTML = opts;
+  fromSel.value = MONTH_KEYS.indexOf(mainF.from)!==-1 ? mainF.from : MONTH_KEYS[0];
+  toSel.value = MONTH_KEYS.indexOf(mainF.to)!==-1 ? mainF.to : MONTH_KEYS[MONTH_KEYS.length-1];
+}
+
+function renderPrintPage(){
+  var pf = currentPrintFilters();
+  var rows = ALL_ROWS.filter(function(r){
+    if (pf.division !== "__ALL__" && r.division !== pf.division) return false;
+    if (pf.mid !== "__ALL__" && r.midCategory !== pf.mid) return false;
+    return r.monthKey>=pf.from && r.monthKey<=pf.to;
+  });
+  var divisions = Array.from(new Set(rows.map(function(r){ return r.division; }))).sort();
+  var periodLabel = monthKeyLabel(pf.from)+" ~ "+monthKeyLabel(pf.to);
+  var mono = PP.mono;
+  var pal = mono
+    ? { TKM:"#333333", NEW:"#767676" }
+    : { TKM: DIVISION_HUES.TKM.dark, NEW: DIVISION_HUES.NEW.dark };
+  function hueOf(d){ return pal[d] || (mono ? "#454545" : COLOR.accent); }
+
+  var kpiHtml = divisions.map(function(d){
+    var dRows = rows.filter(function(r){ return r.division===d; });
+    var op = opRateOf(dRows);
+    return '<div class="pp-kpi"><div class="pp-kpi-label">'+escapeHtml(d)+' 매출총액</div>'+
+      '<div class="pp-kpi-value">'+formatKRW(sum(dRows,"totalRevenue"))+'원</div></div>'+
+      '<div class="pp-kpi"><div class="pp-kpi-label">'+escapeHtml(d)+' 영업이익</div>'+
+      '<div class="pp-kpi-value">'+formatKRW(op.value)+'원 <span style="font-size:9px;">('+op.rate.toFixed(0)+'%)</span></div></div>';
+  }).join("");
+  if (divisions.length>1){
+    var opAll = opRateOf(rows);
+    kpiHtml += '<div class="pp-kpi"><div class="pp-kpi-label">합산 매출총액</div>'+
+      '<div class="pp-kpi-value">'+formatKRW(sum(rows,"totalRevenue"))+'원</div></div>'+
+      '<div class="pp-kpi"><div class="pp-kpi-label">합산 영업이익</div>'+
+      '<div class="pp-kpi-value">'+formatKRW(opAll.value)+'원 <span style="font-size:9px;">('+opAll.rate.toFixed(0)+'%)</span></div></div>';
+  }
+
+  var compHtml = divisions.map(function(d, di){
+    var dRows = rows.filter(function(r){ return r.division===d; });
+    var items = groupAgg(dRows, "midCategory").slice(0,5);
+    var dTotal = sum(dRows, "totalRevenue");
+    var barsHtml = items.map(function(it){
+      var pct = dTotal>0 ? (it.value/dTotal*100) : 0;
+      var fillStyle = mono ? "" : ("background:"+hueOf(d)+";");
+      var fillClass = mono ? (di%2===0 ? "" : "b") : "";
+      return '<div class="pp-bar-row"><div class="pp-bar-label">'+escapeHtml(it.label)+'</div>'+
+        '<div class="pp-bar-track"><div class="pp-bar-fill '+fillClass+'" style="width:'+pct.toFixed(1)+'%;'+fillStyle+'"></div></div>'+
+        '<div class="pp-bar-value">'+pct.toFixed(0)+'% · '+formatKRW(it.value)+'</div></div>';
+    }).join("");
+    return '<div><div class="pp-section-title" style="'+(mono?"":"color:"+hueOf(d)+";")+'">'+escapeHtml(d)+' 중분류 비중</div>'+
+      (barsHtml || '<p class="empty-state" style="font-size:9px;">데이터 없음</p>')+'</div>';
+  }).join("");
+
+  var forecastHtml = "", formulaHtml = "";
+  var fcMonthKeys = Array.from(new Set(rows.map(function(r){ return r.monthKey; }))).sort();
+  if ((PP.includeForecast || PP.includeFormula) && fcMonthKeys.length>=3){
+    var data = forecastSeries(rows, fcMonthKeys);
+    var effH = effectiveHorizon(fcMonthKeys.length, FC.horizon);
+    var seasonalIdx2 = computeSeasonalIndex(fcMonthKeys, data);
+    var deseason2 = seasonalIdx2 ? data.map(function(v,i){ return v/seasonalIdx2[fcMonthKeys[i].slice(5,7)]; }) : data;
+    var fitted = fitHoltParams(deseason2, FORECAST_PARAMS.phi);
+    var result = holtForecast(deseason2, fitted.alpha, fitted.beta, FORECAST_PARAMS.phi, effH);
+    if (result){
+      var futureKeys = [];
+      var lastKey = fcMonthKeys[fcMonthKeys.length-1];
+      var y = parseInt(lastKey.slice(0,4),10), m = parseInt(lastKey.slice(5,7),10);
+      for (var i=0;i<effH;i++){ m++; if (m>12){ m=1; y++; } futureKeys.push(y+"-"+String(m).padStart(2,"0")); }
+      if (seasonalIdx2){
+        result.forecast = result.forecast.map(function(v,i){ return v*seasonalIdx2[futureKeys[i].slice(5,7)]; });
+      }
+      var exportRatio = exportRatioOf(rows);
+      var fxAdj = 1 + exportRatio*(FC.fxChange/100);
+      var forecastAdj = result.forecast.map(function(v){ return Math.max(0, v*fxAdj); });
+      var lastForecast = forecastAdj[forecastAdj.length-1];
+      var horizonSum = forecastAdj.reduce(function(a,b){ return a+b; },0);
+
+      if (PP.includeForecast){
+        forecastHtml = '<div class="pp-section"><div class="pp-section-title">예측 ('+effH+'개월)</div>'+
+          '<div class="pp-kpi-grid">'+
+          '<div class="pp-kpi"><div class="pp-kpi-label">'+monthKeyLabel(futureKeys[futureKeys.length-1])+' 예측</div>'+
+          '<div class="pp-kpi-value">'+formatKRW(lastForecast)+'원</div></div>'+
+          '<div class="pp-kpi"><div class="pp-kpi-label">'+effH+'개월 합계</div><div class="pp-kpi-value">'+formatKRW(horizonSum)+'원</div></div>'+
+          '<div class="pp-kpi"><div class="pp-kpi-label">수출 비중</div><div class="pp-kpi-value">'+(exportRatio*100).toFixed(1)+'%</div></div>'+
+          '</div></div>';
+      }
+      if (PP.includeFormula){
+        var phiSumH = 0;
+        for (var pk=1; pk<=effH; pk++) phiSumH += Math.pow(FORECAST_PARAMS.phi, pk);
+        var fxPct = exportRatio*100*(FC.fxChange/100);
+        var rowsF = [
+          ["방법", "Holt 지수평활(감쇠추세) · FPP3(Hyndman)"],
+          ["계절/패턴 지수", seasonalIdx2 ? "반영(12개월 이상)" : "미반영(12개월 미만)"],
+          ["수준 L / 추세 T", formatKRW(result.level)+"원 / "+formatKRW(result.trend)+"원/월"],
+          ["평활계수 α, β", "α="+fitted.alpha.toFixed(2)+", β="+fitted.beta.toFixed(2)+" (자동 적합)"],
+          ["감쇠계수 φ", FORECAST_PARAMS.phi.toFixed(2)+" (Σφᵏ="+phiSumH.toFixed(2)+")"],
+          ["환율 보정", "수출비중 "+(exportRatio*100).toFixed(1)+"% × "+(FC.fxChange>=0?"+":"")+FC.fxChange+"% = "+(fxPct>=0?"+":"")+fxPct.toFixed(2)+"%p"],
+          ["모델 적합오차(RMSE)", formatKRW(result.rmse)+"원"]
+        ];
+        formulaHtml = '<div class="pp-section pp-formula"><div class="pp-section-title">산출 근거</div><table>'+
+          rowsF.map(function(r){ return '<tr><td>'+escapeHtml(r[0])+'</td><td>'+escapeHtml(r[1])+'</td></tr>'; }).join("")+
+          '</table></div>';
+      }
+    }
+  }
+
+  var page = document.getElementById("printPage");
+  page.className = "print-page"+(PP.orient==="landscape" ? " landscape" : "")+(mono ? " mono" : "");
+  page.innerHTML =
+    '<div class="pp-header"><h1>TKM · NEW 손익 현황 요약</h1>'+
+    '<div class="pp-meta">조회기간 '+escapeHtml(periodLabel)+' · 사업부문 '+escapeHtml(pf.division==="__ALL__"?"전체":pf.division)+
+    ' · 중분류 '+escapeHtml(pf.mid==="__ALL__"?"전체":pf.mid)+'<br>생성일 '+new Date().toLocaleDateString("ko-KR")+'</div></div>'+
+    '<div class="pp-section"><div class="pp-section-title">누적 실적 지표</div><div class="pp-kpi-grid">'+kpiHtml+'</div></div>'+
+    '<div class="pp-section"><div class="pp-cols">'+compHtml+'</div></div>'+
+    forecastHtml+formulaHtml+
+    '<div class="pp-footer">다차원 손익현황(S) 기준 · 예측은 참고용, 검토 필요 · 본 문서는 자동 생성된 요약본입니다.</div>';
+
+  fitPrintPageToStage();
+}
+
+function fitPrintPageToStage(){
+  var stage = document.getElementById("printModalStage");
+  var wrap = document.getElementById("printPageWrap");
+  var page = document.getElementById("printPage");
+  page.style.transform = "none";
+  var rect = page.getBoundingClientRect();
+  var availW = stage.clientWidth - 56, availH = stage.clientHeight - 56;
+  var scale = Math.min(availW/rect.width, availH/rect.height, 1);
+  page.style.transform = "scale("+scale+")";
+  wrap.style.width = (rect.width*scale)+"px";
+  wrap.style.height = (rect.height*scale)+"px";
+}
+
+function openPrintPreview(){
+  if (!ALL_ROWS.length) return;
+  populatePrintFilters();
+  document.getElementById("printModal").hidden = false;
+  renderPrintPage();
+}
+function closePrintPreview(){
+  document.getElementById("printModal").hidden = true;
+}
+function doActualPrint(){
+  document.getElementById("pageOrientStyle").textContent = "@page{ size: A4 "+PP.orient+"; margin: 0; }";
+  window.print();
+}
+window.openPrintPreview = openPrintPreview;
+
 window.addEventListener("DOMContentLoaded", function(){
   document.getElementById("divisionFilter").addEventListener("change", renderAll);
   document.getElementById("midFilter").addEventListener("change", renderAll);
   document.getElementById("resetFiltersBtn").addEventListener("click", resetFilters);
   initForecastControls();
-  window.addEventListener("resize", function(){ if (ALL_ROWS.length) renderAll(); });
+  window.addEventListener("resize", function(){
+    if (ALL_ROWS.length) renderAll();
+    if (!document.getElementById("printModal").hidden) fitPrintPageToStage();
+  });
+
+  document.getElementById("printModalClose").addEventListener("click", closePrintPreview);
+  document.getElementById("printModalPrint").addEventListener("click", doActualPrint);
+  document.getElementById("printDivision").addEventListener("change", function(){ refreshPrintMidOptions(); renderPrintPage(); });
+  document.getElementById("printMid").addEventListener("change", renderPrintPage);
+  document.getElementById("printFrom").addEventListener("change", renderPrintPage);
+  document.getElementById("printTo").addEventListener("change", renderPrintPage);
+  document.querySelectorAll("#printOrientSeg .seg-btn").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      document.querySelectorAll("#printOrientSeg .seg-btn").forEach(function(b){ b.classList.remove("active"); });
+      btn.classList.add("active");
+      PP.orient = btn.getAttribute("data-val");
+      renderPrintPage();
+    });
+  });
+  document.querySelectorAll("#printColorSeg .seg-btn").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      document.querySelectorAll("#printColorSeg .seg-btn").forEach(function(b){ b.classList.remove("active"); });
+      btn.classList.add("active");
+      PP.mono = btn.getAttribute("data-val")==="mono";
+      renderPrintPage();
+    });
+  });
+  document.getElementById("printIncludeForecast").addEventListener("change", function(e){ PP.includeForecast = e.target.checked; renderPrintPage(); });
+  document.getElementById("printIncludeFormula").addEventListener("change", function(e){ PP.includeFormula = e.target.checked; renderPrintPage(); });
 
   if (window.EMBEDDED_ROWS && window.EMBEDDED_ROWS.length) seedReportData(window.EMBEDDED_ROWS);
 });

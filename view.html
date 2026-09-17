@@ -197,16 +197,67 @@
   .save-status{font-size:11px;color:var(--muted);}
   .loading-note{padding:40px 20px;text-align:center;color:var(--muted);font-size:12px;}
 
+  /* ================= 인쇄 미리보기 모달 ================= */
+  .print-modal{position:fixed;inset:0;z-index:200;background:rgba(28,35,51,.55);
+    display:flex;flex-direction:column;}
+  .print-modal[hidden]{display:none;}
+  .print-modal-panel{display:flex;flex-direction:column;height:100%;}
+  .print-modal-toolbar{background:var(--surface);border-bottom:1px solid var(--border);
+    padding:12px 20px;display:flex;flex-direction:column;gap:10px;flex-shrink:0;}
+  .print-modal-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+  .print-modal-row .filter-group{flex-direction:row;align-items:center;gap:6px;}
+  .print-modal-row .filter-group select{width:auto;}
+  .print-modal-actions{display:flex;gap:8px;margin-left:auto;}
+  .print-check{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--ink-2);
+    font-weight:600;cursor:pointer;user-select:none;}
+  .print-modal-stage{flex:1;overflow:auto;background:#dde1ea;display:flex;
+    align-items:flex-start;justify-content:center;padding:28px;}
+  .print-page-wrap{flex-shrink:0;}
+  .print-page{position:relative;width:210mm;height:297mm;background:#fff;box-shadow:0 6px 28px rgba(20,24,40,.28);
+    transform-origin:top left;box-sizing:border-box;padding:12mm;overflow:hidden;
+    font-family:"Pretendard Variable","Pretendard",system-ui,sans-serif;color:#1c2333;}
+  .print-page.landscape{width:297mm;height:210mm;}
+
+  /* 인쇄 요약 콘텐츠 내부 스타일 */
+  .pp-header{display:flex;justify-content:space-between;align-items:flex-end;
+    border-bottom:2px solid #1c2333;padding-bottom:6px;margin-bottom:10px;}
+  .pp-header h1{font-size:15px;margin:0;}
+  .pp-header .pp-meta{font-size:9px;color:#5b6478;text-align:right;line-height:1.5;}
+  .pp-section{margin-bottom:12px;}
+  .pp-section-title{font-size:10.5px;font-weight:800;margin:0 0 6px;padding-bottom:3px;
+    border-bottom:1px solid #dcdfef;}
+  .pp-kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;}
+  .pp-kpi{border:1px solid #e7e9f4;border-radius:6px;padding:6px 8px;}
+  .pp-kpi-label{font-size:8.5px;color:#5b6478;font-weight:700;}
+  .pp-kpi-value{font-size:13px;font-weight:800;margin-top:2px;}
+  .pp-bar-row{display:flex;align-items:center;gap:6px;font-size:8.5px;margin:3px 0;}
+  .pp-bar-label{width:72px;flex-shrink:0;color:#1c2333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .pp-bar-track{flex:1;height:7px;border-radius:3px;background:#eef0f6;overflow:hidden;}
+  .pp-bar-fill{height:100%;}
+  .pp-bar-value{width:60px;flex-shrink:0;text-align:right;color:#5b6478;font-variant-numeric:tabular-nums;}
+  .pp-cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  .pp-formula table{width:100%;border-collapse:collapse;font-size:8.5px;}
+  .pp-formula td{padding:2px 6px;border-bottom:1px solid #edeef7;}
+  .pp-formula td:first-child{color:#5b6478;font-weight:700;white-space:nowrap;width:90px;}
+  .pp-footer{position:absolute;bottom:10mm;left:12mm;right:12mm;font-size:8px;color:#8890a3;
+    border-top:1px solid #edeef7;padding-top:5px;}
+
+  /* 흑백(잉크절약) 모드: 큰 면적 진한 채움을 없애고 외곽선·해칭으로 구분 */
+  .print-page.mono .pp-bar-fill{background:#fff !important;border:1.3px solid #333;box-sizing:border-box;}
+  .print-page.mono .pp-bar-fill.b{border-style:dashed;}
+  .print-page.mono .pp-kpi-value, .print-page.mono .pp-header h1{color:#111;}
+  .print-page.mono, .print-page.mono .pp-kpi-label, .print-page.mono .pp-bar-value{color:#333;}
+
   @media print{
-    .topbar-actions, #resetFiltersBtn{display:none !important;}
-    .app-header{background:var(--blue) !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-    body{font-size:11px;}
-    .layout-row{max-width:none;padding:0;}
-    .filter-sidebar{display:none;}
-    .page{padding:10px 6px;}
-    .chart-card, .kpi-tile, .sub-card{break-inside:avoid;}
+    body > *:not(.print-modal){display:none !important;}
+    .print-modal{position:static;background:none;display:block;}
+    .print-modal-toolbar{display:none !important;}
+    .print-modal-stage{display:block;overflow:visible;background:none;padding:0;}
+    .print-page-wrap{width:auto !important;height:auto !important;}
+    .print-page{position:fixed;top:0;left:0;box-shadow:none;transform:none !important;}
   }
 </style>
+<style id="pageOrientStyle">@page{ size: A4 portrait; margin: 0; }</style>
 </head>
 <body>
 
@@ -318,10 +369,54 @@
 </div>
 <div id="tooltip" class="tooltip" hidden></div>
 
+<div class="print-modal" id="printModal" hidden>
+  <div class="print-modal-panel">
+    <div class="print-modal-toolbar">
+      <div class="print-modal-row">
+        <div class="filter-group">
+          <label for="printDivision">사업부문</label>
+          <select id="printDivision"></select>
+        </div>
+        <div class="filter-group">
+          <label for="printMid">중분류</label>
+          <select id="printMid"></select>
+        </div>
+        <div class="filter-group period-group">
+          <label>기간</label>
+          <select id="printFrom"></select>
+          <span class="period-sep">~</span>
+          <select id="printTo"></select>
+        </div>
+      </div>
+      <div class="print-modal-row">
+        <div class="seg-group" id="printOrientSeg">
+          <button type="button" class="seg-btn active" data-val="portrait">세로</button>
+          <button type="button" class="seg-btn" data-val="landscape">가로</button>
+        </div>
+        <div class="seg-group" id="printColorSeg">
+          <button type="button" class="seg-btn active" data-val="color">컬러</button>
+          <button type="button" class="seg-btn" data-val="mono">흑백(잉크절약)</button>
+        </div>
+        <label class="print-check"><input type="checkbox" id="printIncludeForecast" checked> 예측 포함</label>
+        <label class="print-check"><input type="checkbox" id="printIncludeFormula" checked> 산출근거 포함</label>
+        <div class="print-modal-actions">
+          <button type="button" class="btn-ghost" id="printModalClose">닫기</button>
+          <button type="button" class="btn-ghost primary" id="printModalPrint">인쇄</button>
+        </div>
+      </div>
+    </div>
+    <div class="print-modal-stage" id="printModalStage">
+      <div class="print-page-wrap" id="printPageWrap">
+        <div class="print-page" id="printPage"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 window.addEventListener("DOMContentLoaded", function(){
   var btn = document.getElementById("printBtn");
-  if (btn) btn.addEventListener("click", function(){ window.print(); });
+  if (btn) btn.addEventListener("click", function(){ if (window.openPrintPreview) window.openPrintPreview(); });
 
   var params = new URLSearchParams(window.location.search);
   var versionId = params.get("v");
