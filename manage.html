@@ -1058,6 +1058,31 @@ function renderKPI(rows, divisions, periodLabel){
    T_t = β·(L_t - L_{t-1}) + (1-β)·φ·T_{t-1}
    예측 Ŷ_{t+h} = L_t + φ_sum(h)·T_t,  φ_sum(h) = φ+φ²+...+φʰ
    ================================================================ */
+/* alpha·beta를 고정값으로 두면(예: 0.3/0.1) 실제 데이터의 변동성과 안 맞아
+   신뢰구간이 근거 없이 넓어지는 문제가 있어, 과거 실적의 1-step 잔차제곱합이
+   최소가 되는 조합을 격자 탐색으로 찾는다(φ는 FPP3 권장 감쇠값 0.9로 고정). */
+function fitHoltParams(data, phi){
+  var n = data.length;
+  var skip = Math.min(3, Math.floor(n*0.25));
+  var bestAlpha = 0.3, bestBeta = 0.1, bestSSE = Infinity;
+  for (var a=1; a<=19; a++){
+    var alpha = a*0.05;
+    for (var b=1; b<=19; b++){
+      var beta = b*0.05;
+      var L = data[0], T = data[1]-data[0], sse = 0;
+      for (var t=1; t<n; t++){
+        var Lp=L, Tp=T;
+        var pred = Lp + phi*Tp;
+        if (t>=skip){ var e = data[t]-pred; sse += e*e; }
+        L = alpha*data[t] + (1-alpha)*(Lp+phi*Tp);
+        T = beta*(L-Lp) + (1-beta)*phi*Tp;
+      }
+      if (sse < bestSSE){ bestSSE = sse; bestAlpha = alpha; bestBeta = beta; }
+    }
+  }
+  return { alpha:bestAlpha, beta:bestBeta };
+}
+
 function holtForecast(data, alpha, beta, phi, h){
   var n = data.length;
   if (n < 2) return null;
@@ -1101,11 +1126,12 @@ function holtForecast(data, alpha, beta, phi, h){
   return { fitted:fitted, forecast:fc, ciLow:ciLow, ciHigh:ciHigh, rmse:rmse, level:L, trend:T };
 }
 
-/* 파라미터는 조절 UI 없이 고정한다 — FPP3(Hyndman)이 "자동 예측에서
-   가장 신뢰할 수 있는 선택"으로 꼽는 감쇠추세(damped trend) 조합.
-   α·β·φ 같은 통계 용어를 직접 만지게 하는 대신, 쓰는 사람이 이해할 수
-   있는 축(대상 사업부문 / 예측 개월 / 환율 변동률)만 조절하게 한다. */
-var FORECAST_PARAMS = { alpha:0.3, beta:0.1, phi:0.9 };
+/* φ(감쇠계수)는 FPP3(Hyndman)이 "자동 예측에서 가장 신뢰할 수 있는 선택"으로
+   꼽는 감쇠추세(damped trend) 표준값으로 고정한다. α·β는 매 조회마다 실제
+   데이터에 맞춰 자동 적합(fitHoltParams)하므로 고정하지 않는다. 쓰는 사람은
+   α·β·φ 같은 통계 용어를 직접 만지는 대신, 이해할 수 있는 축(대상 사업부문 /
+   예측 개월 / 환율 변동률)만 조절한다. */
+var FORECAST_PARAMS = { phi:0.9 };
 var FC = { division:"ALL", horizon:3, fxChange:0 };
 
 function forecastSeries(division){
@@ -1136,7 +1162,8 @@ function renderForecast(){
   card.hidden = false;
 
   var data = forecastSeries(FC.division);
-  var result = holtForecast(data, FORECAST_PARAMS.alpha, FORECAST_PARAMS.beta, FORECAST_PARAMS.phi, FC.horizon);
+  var fitted = fitHoltParams(data, FORECAST_PARAMS.phi);
+  var result = holtForecast(data, fitted.alpha, fitted.beta, FORECAST_PARAMS.phi, FC.horizon);
   if (!result){
     document.getElementById("forecastChart").innerHTML = '<p class="empty-state">예측에 필요한 데이터가 부족합니다.</p>';
     document.getElementById("forecastKPI").innerHTML = "";
@@ -1161,7 +1188,7 @@ function renderForecast(){
   var categories = MONTH_KEYS.concat(futureKeys).map(monthKeyLabel);
   var actualValues = data.concat(futureKeys.map(function(){ return null; }));
   var forecastValues = MONTH_KEYS.map(function(){ return null; }).concat(forecastAdj);
-  var bandLow = MONTH_KEYS.map(function(){ return null; }).concat(result.ciLow.map(function(v){ return v*fxAdj; }));
+  var bandLow = MONTH_KEYS.map(function(){ return null; }).concat(result.ciLow.map(function(v){ return Math.max(0, v*fxAdj); }));
   var bandHigh = MONTH_KEYS.map(function(){ return null; }).concat(result.ciHigh.map(function(v){ return v*fxAdj; }));
 
   drawForecastChart(document.getElementById("forecastChart"), categories,
@@ -1200,6 +1227,7 @@ function renderForecast(){
     ["추정식", "Y(t+h) = L + (φ+φ²+...+φʰ)·T"],
     ["현재 수준 L", formatKRW(result.level)+"원"],
     ["월별 추세 T", formatKRW(result.trend)+"원/월"],
+    ["평활 계수 α, β", "α="+fitted.alpha.toFixed(2)+", β="+fitted.beta.toFixed(2)+" (과거 실적 오차 최소화로 자동 적합)"],
     ["감쇠계수 φ", FORECAST_PARAMS.phi.toFixed(2)+" (h="+FC.horizon+" 합 Σφᵏ = "+phiSumH.toFixed(2)+")"],
     ["환율 반영식", "Y_조정 = Y × (1 + 수출비중 × Δ환율%)"],
     ["대입값", "수출비중 "+(exportRatio*100).toFixed(1)+"% × 환율 "+(FC.fxChange>=0?"+":"")+FC.fxChange+"% = 보정 "+(fxPct>=0?"+":"")+fxPct.toFixed(2)+"%p"],
