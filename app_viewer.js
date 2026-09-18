@@ -27,6 +27,11 @@ var DIVISION_HUES = {
 };
 
 var ALL_ROWS = [];
+/* 첫 진입/필터 적용 시에만 등장 애니메이션을 재생한다. 리사이즈 등
+   레이아웃 재계산만 필요한 재렌더링에서는 false로 두어 애니메이션이
+   불필요하게 다시 재생되지 않게 한다(모바일 스크롤 중 주소창이 접혔다
+   펼쳐지며 resize가 반복 발생하는 경우가 대표적). */
+var RENDER_ANIMATE = true;
 var MONTH_KEYS = []; // 임베드된 데이터 전체의 monthKey, 오름차순 정렬 (예: "2025-01")
 
 /* ---------- 유틸 ---------- */
@@ -82,6 +87,7 @@ function makeBezierEasing(mX1, mY1, mX2, mY2){
 var easeLoad = makeBezierEasing(0.65, 0, 0.35, 1);
 
 function animateNumber(el, target, duration, formatFn){
+  if (!RENDER_ANIMATE){ el.textContent = formatFn(target); return; }
   var start = performance.now();
   function tick(now){
     var t = Math.min(1, (now-start)/duration);
@@ -89,6 +95,16 @@ function animateNumber(el, target, duration, formatFn){
     if (t < 1) requestAnimationFrame(tick);
   }
   requestAnimationFrame(tick);
+}
+
+/* 등장 애니메이션 중엔 그림자 필터를 뺐다가(성능), 애니메이션이 끝나는
+   시점에 data-restore-filter에 적어둔 필터를 다시 붙인다. */
+function restoreFilterAfterAnimation(container, delayMs){
+  setTimeout(function(){
+    container.querySelectorAll("[data-restore-filter]").forEach(function(el){
+      el.setAttribute("filter", el.getAttribute("data-restore-filter"));
+    });
+  }, delayMs);
 }
 
 /* ---------- 차트: 공통 ---------- */
@@ -172,9 +188,14 @@ function drawGroupedBars(container, categories, series, opts){
         var y = mT + yOf(Math.max(v,0));
         var h = Math.max(0, plotH - yOf(Math.max(v,0)));
         var tip = s.label+" · "+cat+": "+formatFull(v);
-        var dash = s.dashed ? ' stroke="'+s.color+'" stroke-width="1.5" stroke-dasharray="3,2" fill-opacity="0.55"' : ' filter="url(#barShadow'+uid+')"';
+        /* 성장 애니메이션과 그림자 필터를 동시에 적용하면(특히 저사양 GPU에서)
+           매 프레임 필터를 다시 계산해야 해 버벅거림의 주 원인이 된다 —
+           애니메이션 재생 중에는 필터를 빼고, 끝나는 시점에 다시 붙인다
+           (restoreFilterAfterAnimation). */
+        var dash = s.dashed ? ' stroke="'+s.color+'" stroke-width="1.5" stroke-dasharray="3,2" fill-opacity="0.55"'
+          : (RENDER_ANIMATE ? ' data-restore-filter="url(#barShadow'+uid+')"' : ' filter="url(#barShadow'+uid+')"');
         var fill = s.dashed ? s.color : 'url(#barGrad'+uid+'-'+si+')';
-        svg += '<rect class="bar bar-grow-v" data-tip="'+escapeAttr(tip)+'" x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+barW.toFixed(1)+'" height="'+h.toFixed(1)+'" rx="3.5" fill="'+fill+'"'+dash+'/>';
+        svg += '<rect class="bar'+(RENDER_ANIMATE?' bar-grow-v':'')+'" data-tip="'+escapeAttr(tip)+'" x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+barW.toFixed(1)+'" height="'+h.toFixed(1)+'" rx="3.5" fill="'+fill+'"'+dash+'/>';
       }
     });
     if (ci % labelStep === 0 || ci === categories.length-1){
@@ -186,6 +207,7 @@ function drawGroupedBars(container, categories, series, opts){
   container.innerHTML = svg;
   attachTooltip(container);
   renderLegend(container, series.map(function(s){ return { label:s.label, color:s.color }; }));
+  if (RENDER_ANIMATE) restoreFilterAfterAnimation(container, 700);
 }
 
 /* ---------- 차트: 예측(실측 막대 + 예측선 + 95% 구간 밴드) ----------
@@ -236,26 +258,70 @@ function drawForecastChart(container, categories, actualSeries, forecastLine, ba
     svg += '<text x="'+(mL-8)+'" y="'+(y+4)+'" text-anchor="end" font-size="11" fill="'+COLOR.muted+'">'+formatKRW(v)+'</text>';
   }
 
+  /* 예측선(심지)이 점→점으로 이어그리며 완성된 다음에야 신뢰구간이
+     벌어지기 시작한다 — 그래서 선을 그리는 데 걸리는 시간(lineDrawMs)을
+     먼저 계산해두고, 아래 밴드 애니메이션의 시작 시각(begin)으로 쓴다. */
+  var linePoints = [];
+  categories.forEach(function(cat, ci){
+    if (forecastLine.values[ci]==null) return;
+    linePoints.push({ x:cx(ci), y:mT+yOf(Math.max(forecastLine.values[ci],0)), v:forecastLine.values[ci], cat:cat, ci:ci });
+  });
+  var lineCumDist = [0], lineTotalDist = 0;
+  for (var li=1; li<linePoints.length; li++){
+    var dx = linePoints[li].x-linePoints[li-1].x, dy = linePoints[li].y-linePoints[li-1].y;
+    lineTotalDist += Math.sqrt(dx*dx+dy*dy);
+    lineCumDist.push(lineTotalDist);
+  }
+  var lineDrawMs = linePoints.length>1 ? Math.min(550, Math.max(200, (linePoints.length-1)*100)) : 0;
+
+  /* 신뢰구간은 '심지'(예측선 값)에서 상단/하단이 갈라지며 벌어지는 모양으로
+     등장한다 — cy는 그 지점의 예측선(중심값) y좌표, y는 실제 상/하단 y좌표. */
   var topPts = [], botPts = [];
   categories.forEach(function(cat, ci){
     if (band.high[ci]==null) return;
-    topPts.push({ x:cx(ci), y:mT+yOf(band.high[ci]), v:band.high[ci], cat:cat });
+    var cy = mT+yOf(Math.max(forecastLine.values[ci]||0,0));
+    topPts.push({ x:cx(ci), y:mT+yOf(band.high[ci]), cy:cy, v:band.high[ci], cat:cat });
   });
   categories.forEach(function(cat, ci){
     if (band.low[ci]==null) return;
-    botPts.push({ x:cx(ci), y:mT+yOf(Math.max(band.low[ci],0)), v:Math.max(band.low[ci],0), cat:cat });
+    var cy = mT+yOf(Math.max(forecastLine.values[ci]||0,0));
+    botPts.push({ x:cx(ci), y:mT+yOf(Math.max(band.low[ci],0)), cy:cy, v:Math.max(band.low[ci],0), cat:cat });
   });
-  var bandPoints = topPts.map(function(p){ return p.x.toFixed(1)+','+p.y.toFixed(1); })
+  var bandPointsTo = topPts.map(function(p){ return p.x.toFixed(1)+','+p.y.toFixed(1); })
     .concat(botPts.slice().reverse().map(function(p){ return p.x.toFixed(1)+','+p.y.toFixed(1); }));
-  if (bandPoints.length>=4){
-    svg += '<polygon points="'+bandPoints.join(' ')+'" fill="url(#bandGrad'+uid+')" filter="url(#softBlur'+uid+')"/>';
-    svg += '<polygon points="'+bandPoints.join(' ')+'" fill="url(#bandGrad'+uid+')"/>';
-    var topEdge = topPts.map(function(p,i){ return (i===0?'M':'L')+p.x.toFixed(1)+','+p.y.toFixed(1); }).join(' ');
-    var botEdge = botPts.map(function(p,i){ return (i===0?'M':'L')+p.x.toFixed(1)+','+p.y.toFixed(1); }).join(' ');
-    svg += '<path d="'+topEdge+'" fill="none" stroke="'+bandColor+'" stroke-width="1" stroke-opacity="0.4" stroke-linecap="round"/>';
-    svg += '<path d="'+botEdge+'" fill="none" stroke="'+bandColor+'" stroke-width="1" stroke-opacity="0.4" stroke-linecap="round"/>';
+  var BAND_DUR = 0.42;
+  var bandBeginS = (lineDrawMs/1000).toFixed(2);
+  if (bandPointsTo.length>=4){
+    var bandPointsFrom = topPts.map(function(p){ return p.x.toFixed(1)+','+p.cy.toFixed(1); })
+      .concat(botPts.slice().reverse().map(function(p){ return p.x.toFixed(1)+','+p.cy.toFixed(1); }));
+    var bandBase = RENDER_ANIMATE ? bandPointsFrom.join(' ') : bandPointsTo.join(' ');
+    var bandAnim = RENDER_ANIMATE
+      ? '<animate attributeName="points" begin="'+bandBeginS+'s" from="'+bandPointsFrom.join(' ')+'" to="'+bandPointsTo.join(' ')+
+        '" dur="'+BAND_DUR+'s" fill="freeze" calcMode="spline" keyTimes="0;1" keySplines="0.65 0 0.35 1"/>'
+      : '';
+    var glowFilter = RENDER_ANIMATE ? ' data-restore-filter="url(#softBlur'+uid+')"' : ' filter="url(#softBlur'+uid+')"';
+    svg += '<polygon points="'+bandBase+'" fill="url(#bandGrad'+uid+')"'+glowFilter+'>'+bandAnim+'</polygon>';
+    svg += '<polygon points="'+bandBase+'" fill="url(#bandGrad'+uid+')">'+bandAnim+'</polygon>';
+    var topEdgeTo = topPts.map(function(p,i){ return (i===0?'M':'L')+p.x.toFixed(1)+','+p.y.toFixed(1); }).join(' ');
+    var botEdgeTo = botPts.map(function(p,i){ return (i===0?'M':'L')+p.x.toFixed(1)+','+p.y.toFixed(1); }).join(' ');
+    var topEdgeAnim = "", botEdgeAnim = "", topEdgeBase = topEdgeTo, botEdgeBase = botEdgeTo;
+    if (RENDER_ANIMATE){
+      var topEdgeFrom = topPts.map(function(p,i){ return (i===0?'M':'L')+p.x.toFixed(1)+','+p.cy.toFixed(1); }).join(' ');
+      var botEdgeFrom = botPts.map(function(p,i){ return (i===0?'M':'L')+p.x.toFixed(1)+','+p.cy.toFixed(1); }).join(' ');
+      topEdgeBase = topEdgeFrom; botEdgeBase = botEdgeFrom;
+      topEdgeAnim = '<animate attributeName="d" begin="'+bandBeginS+'s" from="'+topEdgeFrom+'" to="'+topEdgeTo+'" dur="'+BAND_DUR+'s" fill="freeze" calcMode="spline" keyTimes="0;1" keySplines="0.65 0 0.35 1"/>';
+      botEdgeAnim = '<animate attributeName="d" begin="'+bandBeginS+'s" from="'+botEdgeFrom+'" to="'+botEdgeTo+'" dur="'+BAND_DUR+'s" fill="freeze" calcMode="spline" keyTimes="0;1" keySplines="0.65 0 0.35 1"/>';
+    }
+    svg += '<path d="'+topEdgeBase+'" fill="none" stroke="'+bandColor+'" stroke-width="1" stroke-opacity="0.4" stroke-linecap="round">'+topEdgeAnim+'</path>';
+    svg += '<path d="'+botEdgeBase+'" fill="none" stroke="'+bandColor+'" stroke-width="1" stroke-opacity="0.4" stroke-linecap="round">'+botEdgeAnim+'</path>';
   }
 
+  /* 왼쪽(과거) 데이터부터 오른쪽으로 순서대로 훑으며 자라난다 — 막대 개수와
+     무관하게 전체 훑는 시간은 항상 160ms 안쪽으로 맞춰 빠르게 느껴지게 한다.
+     이 차트만 다른 막대 차트보다 빠르게 가려고 지속시간을 직접 지정한다. */
+  var BAR_GROW_MS = 380;
+  var actualCount = actualSeries.values.filter(function(v){ return v!=null; }).length;
+  var barStagger = actualCount>1 ? Math.min(24, 160/actualCount) : 0;
   categories.forEach(function(cat, ci){
     var v = actualSeries.values[ci];
     if (v==null) return;
@@ -263,35 +329,55 @@ function drawForecastChart(container, categories, actualSeries, forecastLine, ba
     var y = mT + yOf(Math.max(v,0));
     var h = Math.max(0, plotH - yOf(Math.max(v,0)));
     var tip = actualSeries.label+" · "+cat+": "+formatFull(v);
-    svg += '<rect class="bar bar-grow-v" data-tip="'+escapeAttr(tip)+'" x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+barW.toFixed(1)+'" height="'+h.toFixed(1)+'" rx="3.5" fill="url(#barGradF'+uid+')" filter="url(#barShadowF'+uid+')"/>';
+    var barFilter = RENDER_ANIMATE ? ' data-restore-filter="url(#barShadowF'+uid+')"' : ' filter="url(#barShadowF'+uid+')"';
+    var barDelay = RENDER_ANIMATE ? ' style="animation-delay:'+(ci*barStagger).toFixed(0)+'ms;animation-duration:'+BAR_GROW_MS+'ms"' : '';
+    svg += '<rect class="bar'+(RENDER_ANIMATE?' bar-grow-v':'')+'" data-tip="'+escapeAttr(tip)+'" x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+barW.toFixed(1)+'" height="'+h.toFixed(1)+'" rx="3.5" fill="url(#barGradF'+uid+')"'+barFilter+barDelay+'/>';
   });
 
-  var linePoints = [];
-  categories.forEach(function(cat, ci){
-    if (forecastLine.values[ci]==null) return;
-    linePoints.push({ x:cx(ci), y:mT+yOf(Math.max(forecastLine.values[ci],0)), v:forecastLine.values[ci], cat:cat, ci:ci });
-  });
   if (linePoints.length){
     var pathD = linePoints.map(function(p,i){ return (i===0?'M':'L')+p.x.toFixed(1)+','+p.y.toFixed(1); }).join(' ');
-    svg += '<path d="'+pathD+'" fill="none" stroke="'+forecastLine.color+'" stroke-width="2.5" stroke-dasharray="6,3" stroke-linecap="round" filter="url(#lineGlow'+uid+')"/>';
+    var lineFilter = RENDER_ANIMATE ? ' data-restore-filter="url(#lineGlow'+uid+')"' : ' filter="url(#lineGlow'+uid+')"';
+    var lineEl = '<path d="'+pathD+'" fill="none" stroke="'+forecastLine.color+'" stroke-width="2.5" stroke-dasharray="6,3" stroke-linecap="round"'+lineFilter+'/>';
+    var firstX = linePoints[0].x, lastX = linePoints[linePoints.length-1].x;
+    /* 점을 왼쪽에서 오른쪽으로 하나씩 이어그리는 효과 — 클립 사각형의 폭을
+       0에서 전체 폭까지 넓혀서, 데코용 점선 패턴(6,3)은 그대로 두고
+       "얼마나 그려졌는지"만 가린다. */
+    if (RENDER_ANIMATE && linePoints.length>1){
+      var revealW = (lastX-firstX)+12;
+      svg += '<clipPath id="lineReveal'+uid+'"><rect x="'+(firstX-6).toFixed(1)+'" y="0" width="0" height="'+height+'">'+
+        '<animate attributeName="width" from="0" to="'+revealW.toFixed(1)+'" dur="'+(lineDrawMs/1000)+'s" fill="freeze" calcMode="linear"/>'+
+        '</rect></clipPath>';
+      svg += '<g clip-path="url(#lineReveal'+uid+')">'+lineEl+'</g>';
+    } else {
+      svg += lineEl;
+    }
     linePoints.forEach(function(p){
       var tip = (forecastLine.tips && forecastLine.tips[p.ci]) || (forecastLine.label+" · "+p.cat+": "+formatFull(p.v));
-      svg += '<circle data-tip="'+escapeAttr(tip)+'" cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="11" fill="url(#dotGlow'+uid+')"/>';
-      svg += '<circle class="bar" data-tip="'+escapeAttr(tip)+'" cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="4" fill="'+forecastLine.color+'" stroke="#fff" stroke-width="1.2"/>';
+      var delayMs = (RENDER_ANIMATE && linePoints.length>1) ? ((p.x-firstX)/(lastX-firstX))*lineDrawMs : 0;
+      var popAttrs = RENDER_ANIMATE ? ' class="point-pop" style="animation-delay:'+delayMs.toFixed(0)+'ms"' : '';
+      var popAttrsDot = RENDER_ANIMATE ? ' class="bar point-pop" style="animation-delay:'+delayMs.toFixed(0)+'ms"' : ' class="bar"';
+      svg += '<circle data-tip="'+escapeAttr(tip)+'"'+popAttrs+' cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="11" fill="url(#dotGlow'+uid+')"/>';
+      svg += '<circle data-tip="'+escapeAttr(tip)+'"'+popAttrsDot+' cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="4" fill="'+forecastLine.color+'" stroke="#fff" stroke-width="1.2"/>';
     });
   }
 
-  /* 신뢰구간 상단/하단 경계에도 호버 포인트를 찍어 상향/하향 예측값을 바로 확인할 수 있게 한다 */
-  topPts.forEach(function(p){
-    var tip = "상향(95%) · "+p.cat+": "+formatFull(p.v);
-    svg += '<circle data-tip="'+escapeAttr(tip)+'" cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="9" fill="url(#dotGlow'+uid+')"/>';
-    svg += '<circle class="bar" data-tip="'+escapeAttr(tip)+'" cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="2.6" fill="'+lighten(bandColor,0.2)+'" stroke="#fff" stroke-width="1"/>';
-  });
-  botPts.forEach(function(p){
-    var tip = "하향(95%) · "+p.cat+": "+formatFull(p.v);
-    svg += '<circle data-tip="'+escapeAttr(tip)+'" cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="9" fill="url(#dotGlow'+uid+')"/>';
-    svg += '<circle class="bar" data-tip="'+escapeAttr(tip)+'" cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="2.6" fill="'+lighten(bandColor,0.2)+'" stroke="#fff" stroke-width="1"/>';
-  });
+  /* 신뢰구간 상단/하단 경계에도 호버 포인트를 찍어 상향/하향 예측값을 바로 확인할 수 있게 한다.
+     선이 지나갈 때 심지 위치에서 나타났다가, 밴드가 벌어질 때 같이 실제 경계까지 이동한다. */
+  function boundaryDotSvg(p, tipLabel){
+    var tip = tipLabel+" · "+p.cat+": "+formatFull(p.v);
+    var popDelay = (RENDER_ANIMATE && linePoints.length>1) ? ((p.x-firstX)/(lastX-firstX))*lineDrawMs : 0;
+    var popAttrs = RENDER_ANIMATE ? ' class="point-pop" style="animation-delay:'+popDelay.toFixed(0)+'ms"' : '';
+    var popAttrsDot = RENDER_ANIMATE ? ' class="bar point-pop" style="animation-delay:'+popDelay.toFixed(0)+'ms"' : ' class="bar"';
+    var cyBase = RENDER_ANIMATE ? p.cy.toFixed(1) : p.y.toFixed(1);
+    var moveAnim = RENDER_ANIMATE
+      ? '<animate attributeName="cy" begin="'+bandBeginS+'s" from="'+p.cy.toFixed(1)+'" to="'+p.y.toFixed(1)+'" dur="'+BAND_DUR+'s" fill="freeze" calcMode="spline" keyTimes="0;1" keySplines="0.65 0 0.35 1"/>'
+      : '';
+    var out = '<circle data-tip="'+escapeAttr(tip)+'"'+popAttrs+' cx="'+p.x.toFixed(1)+'" cy="'+cyBase+'" r="9" fill="url(#dotGlow'+uid+')">'+moveAnim+'</circle>';
+    out += '<circle data-tip="'+escapeAttr(tip)+'"'+popAttrsDot+' cx="'+p.x.toFixed(1)+'" cy="'+cyBase+'" r="2.6" fill="'+lighten(bandColor,0.2)+'" stroke="#fff" stroke-width="1">'+moveAnim+'</circle>';
+    return out;
+  }
+  topPts.forEach(function(p){ svg += boundaryDotSvg(p, "상향(95%)"); });
+  botPts.forEach(function(p){ svg += boundaryDotSvg(p, "하향(95%)"); });
 
   var minLabelW = 34;
   var labelStep = Math.max(1, Math.ceil(categories.length * minLabelW / plotW));
@@ -309,6 +395,12 @@ function drawForecastChart(container, categories, actualSeries, forecastLine, ba
     { label:forecastLine.label, color:forecastLine.color },
     { label:"95% 예측구간", color: opts.bandColor||COLOR.violet }
   ]);
+  if (RENDER_ANIMATE){
+    var barSweepMs = actualCount>1 ? (actualCount-1)*barStagger + BAR_GROW_MS : BAR_GROW_MS;
+    restoreFilterAfterAnimation(container, barSweepMs + 20);
+    var lineBandTotalMs = lineDrawMs + (bandPointsTo.length>=4 ? BAND_DUR*1000 : 0);
+    restoreFilterAfterAnimation(container, lineBandTotalMs + 20);
+  }
 }
 
 /* ---------- 차트: 도넛(구성 비중) ---------- */
@@ -349,16 +441,21 @@ function drawDonut(container, items){
     var frac = it.value/total;
     var segLen = Math.max(0, frac*circumference - gapPx);
     var tip = it.label+" · "+(frac*100).toFixed(1)+"% · "+formatFull(it.value);
+    var growAnim = RENDER_ANIMATE
+      ? '<animate attributeName="stroke-dasharray" from="0 '+circumference.toFixed(2)+'" to="'+segLen.toFixed(2)+' '+(circumference-segLen).toFixed(2)+
+        '" dur="0.72s" fill="freeze" calcMode="spline" keyTimes="0;1" keySplines="0.65 0 0.35 1"/>'
+      : '';
+    /* 도넛도 바 차트와 같은 이유로 — 원호 펼침 애니메이션 중에는 그림자
+       필터를 빼서 매 프레임 필터 재계산 비용을 없애고, 끝나는 시점에 다시 붙인다. */
+    var donutFilter = RENDER_ANIMATE ? ' data-restore-filter="url(#donutShadow'+uid+')"' : ' filter="url(#donutShadow'+uid+')"';
     svg += '<circle class="bar" data-tip="'+escapeAttr(tip)+'" cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="url(#donutGrad'+uid+'-'+i+')"'+
       ' stroke-width="'+thickness+'" stroke-dasharray="'+segLen.toFixed(2)+' '+(circumference-segLen).toFixed(2)+
-      '" stroke-dashoffset="'+(-offset).toFixed(2)+'" transform="rotate(-90 '+cx+' '+cy+')" filter="url(#donutShadow'+uid+')">'+
-      '<animate attributeName="stroke-dasharray" from="0 '+circumference.toFixed(2)+'" to="'+segLen.toFixed(2)+' '+(circumference-segLen).toFixed(2)+
-      '" dur="0.72s" fill="freeze" calcMode="spline" keyTimes="0;1" keySplines="0.65 0 0.35 1"/>'+
-      '</circle>';
+      '" stroke-dashoffset="'+(-offset).toFixed(2)+'" transform="rotate(-90 '+cx+' '+cy+')"'+donutFilter+'>'+
+      growAnim+'</circle>';
     offset += frac*circumference;
   });
   var top = segs[0];
-  svg += '<g class="donut-fade">';
+  svg += '<g class="'+(RENDER_ANIMATE ? 'donut-fade' : '')+'">';
   svg += '<text x="'+cx+'" y="'+(cy-4)+'" text-anchor="middle" font-size="17" font-weight="700" fill="'+COLOR.ink+'">'+(top.value/total*100).toFixed(0)+'%</text>';
   svg += '<text x="'+cx+'" y="'+(cy+15)+'" text-anchor="middle" font-size="10.5" fill="'+COLOR.muted+'">'+escapeHtml(top.label)+'</text>';
   svg += '</g>';
@@ -369,6 +466,7 @@ function drawDonut(container, items){
     var color = it.isOther ? OTHER_GREY : BU_PALETTE_ORDER[i % BU_PALETTE_ORDER.length];
     return { label: it.label+" "+(it.value/total*100).toFixed(1)+"%", color: color };
   }));
+  if (RENDER_ANIMATE) restoreFilterAfterAnimation(container, 740);
 }
 
 /* ---------- 집계 ---------- */
@@ -654,7 +752,10 @@ function exportRatioOf(rows){
   return exportSum / total;
 }
 
-function renderForecast(){
+function renderForecast(animate){
+  /* animate가 명시적으로 넘어올 때만 강제로 켜고/끈다 — renderAll()이 내부에서
+     인자 없이 부를 때는 renderAll 쪽에서 이미 정해둔 RENDER_ANIMATE를 그대로 쓴다. */
+  if (animate !== undefined) RENDER_ANIMATE = animate !== false;
   var card = document.getElementById("forecastCard");
   var monthKeys = FC_MONTH_KEYS;
   var rows = FC_ROWS;
@@ -789,7 +890,10 @@ function initForecastControls(){
     el.addEventListener("input", function(){
       FC[key] = parseFloat(el.value);
       val.textContent = fmt ? fmt(FC[key]) : el.value;
-      renderForecast();
+      /* 슬라이더를 조절하는 동안 매번 등장 애니메이션이 재생되면 값이 계속
+         흔들리는 것처럼 보여 가독성이 떨어진다 — 여기서는 애니메이션 없이
+         바로 최종 상태로 그린다. */
+      renderForecast(false);
     });
   }
   slider("fcHorizon", "horizon", function(v){ return v+"개월"; });
@@ -797,8 +901,9 @@ function initForecastControls(){
 }
 
 /* ---------- 렌더 파이프라인 ---------- */
-function renderAll(){
+function renderAll(animate){
   if (!ALL_ROWS.length) return;
+  RENDER_ANIMATE = animate !== false;
   populateFilters(ALL_ROWS);
   initPeriodControls();
   var f = currentFilters();
@@ -844,11 +949,22 @@ function renderAll(){
     });
     var ratioTotal = ratioData.reduce(function(s,x){ return s+x.v; }, 0);
     ratioBox.hidden = false;
+    /* 세그먼트가 동시에 각자 왼쪽에서 자라나면 사이가 뜬 것처럼 보인다 —
+       앞 세그먼트가 다 자란 뒤에 다음 세그먼트가 이어서 자라도록 순서를 줘서
+       바 전체가 왼쪽부터 하나로 이어져 채워지게 한다. */
+    var RATIO_SWEEP_MS = 600;
+    var cumFrac = 0;
     ratioBox.innerHTML =
       '<div class="division-ratio-bar">'+ratioData.map(function(x){
         var pct = ratioTotal>0 ? (x.v/ratioTotal*100) : 0;
         var hue = DIVISION_HUES[x.d] || { dark: COLOR.accent };
-        return '<div class="seg" style="width:'+pct.toFixed(2)+'%;background:'+hue.dark+';"></div>';
+        var frac = pct/100;
+        var style = 'width:'+pct.toFixed(2)+'%;background:'+hue.dark+';';
+        if (RENDER_ANIMATE){
+          style += 'animation-delay:'+(cumFrac*RATIO_SWEEP_MS).toFixed(0)+'ms;animation-duration:'+(frac*RATIO_SWEEP_MS).toFixed(0)+'ms;';
+        }
+        cumFrac += frac;
+        return '<div class="seg'+(RENDER_ANIMATE?'':' no-anim')+'" style="'+style+'"></div>';
       }).join("")+'</div>'+
       '<div class="division-ratio-label">'+ratioData.map(function(x){
         var pct = ratioTotal>0 ? (x.v/ratioTotal*100) : 0;
@@ -1119,21 +1235,37 @@ function renderPrintPage(){
   fitPrintPageToStage();
 }
 
-function fitPrintPageToStage(){
-  var stage = document.getElementById("printModalStage");
+/* 확대율 — null이면 창 크기에 맞춰 자동으로 맞추고(맞춤), 숫자(0.4~2.0)면
+   사용자가 슬라이더로 직접 고른 배율을 그대로 쓴다. */
+var PP_ZOOM = null;
+
+function setPrintPageScale(scale){
   var wrap = document.getElementById("printPageWrap");
+  var page = document.getElementById("printPage");
+  page.style.transform = "none";
+  var rect = page.getBoundingClientRect();
+  page.style.transform = "scale("+scale+")";
+  wrap.style.width = (rect.width*scale)+"px";
+  wrap.style.height = (rect.height*scale)+"px";
+  var pct = Math.round(scale*100);
+  document.getElementById("printZoom").value = pct;
+  document.getElementById("printZoomVal").textContent = pct+"%";
+}
+
+function fitPrintPageToStage(){
+  if (PP_ZOOM != null){ setPrintPageScale(PP_ZOOM); return; }
+  var stage = document.getElementById("printModalStage");
   var page = document.getElementById("printPage");
   page.style.transform = "none";
   var rect = page.getBoundingClientRect();
   var availW = stage.clientWidth - 56, availH = stage.clientHeight - 56;
   var scale = Math.min(availW/rect.width, availH/rect.height, 1);
-  page.style.transform = "scale("+scale+")";
-  wrap.style.width = (rect.width*scale)+"px";
-  wrap.style.height = (rect.height*scale)+"px";
+  setPrintPageScale(scale);
 }
 
 function openPrintPreview(){
   if (!ALL_ROWS.length) return;
+  PP_ZOOM = null;
   populatePrintFilters();
   document.getElementById("printModal").hidden = false;
   renderPrintPage();
@@ -1152,13 +1284,26 @@ window.addEventListener("DOMContentLoaded", function(){
   document.getElementById("midFilter").addEventListener("change", renderAll);
   document.getElementById("resetFiltersBtn").addEventListener("click", resetFilters);
   initForecastControls();
+  var lastResizeWidth = window.innerWidth;
   window.addEventListener("resize", function(){
-    if (ALL_ROWS.length) renderAll();
+    /* 모바일은 스크롤 중 주소창이 접혔다 펼쳐지며 세로 높이만 바뀌어도
+       resize가 발생한다 — 가로 폭이 실제로 바뀐 경우에만 재렌더링한다. */
+    if (window.innerWidth === lastResizeWidth) return;
+    lastResizeWidth = window.innerWidth;
+    if (ALL_ROWS.length) renderAll(false);
     if (!document.getElementById("printModal").hidden) fitPrintPageToStage();
   });
 
   document.getElementById("printModalClose").addEventListener("click", closePrintPreview);
   document.getElementById("printModalPrint").addEventListener("click", doActualPrint);
+  document.getElementById("printZoom").addEventListener("input", function(e){
+    PP_ZOOM = Number(e.target.value)/100;
+    setPrintPageScale(PP_ZOOM);
+  });
+  document.getElementById("printZoomFit").addEventListener("click", function(){
+    PP_ZOOM = null;
+    fitPrintPageToStage();
+  });
   document.getElementById("printDivision").addEventListener("change", function(){ refreshPrintMidOptions(); renderPrintPage(); });
   document.getElementById("printMid").addEventListener("change", renderPrintPage);
   document.getElementById("printFrom").addEventListener("change", renderPrintPage);

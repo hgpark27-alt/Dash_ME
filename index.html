@@ -23,9 +23,7 @@
 
   .app-header{background:var(--surface);color:var(--ink);padding:12px 24px;display:flex;align-items:center;gap:10px;
     border-bottom:1px solid var(--border);}
-  .app-logo{width:28px;height:28px;border-radius:8px;
-    background:linear-gradient(135deg,var(--accent1),var(--accent2));
-    display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12.5px;flex-shrink:0;color:#fff;}
+  .app-logo{height:24px;width:auto;flex-shrink:0;display:block;}
   .app-brand-text{display:flex;flex-direction:column;line-height:1.25;}
   .app-brand-text strong{font-size:13px;font-weight:800;letter-spacing:-0.01em;}
   .app-brand-text span{font-size:10px;color:var(--muted);}
@@ -76,10 +74,10 @@
 <body>
 
 <header class="app-header">
-  <span class="app-logo">H</span>
+  <img class="app-logo" src="assets/hansol-logo.png" alt="Hansol">
   <div class="app-brand-text">
-    <strong>한솔아이원스 안성사업장</strong>
-    <span>영업팀 손익 현황 관리 시스템</span>
+    <strong>한솔아이원스</strong>
+    <span>ME 사업부 손익 현황 관리 시스템</span>
   </div>
   <span class="div-badge">TKM · NEW</span>
 </header>

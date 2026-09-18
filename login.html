@@ -22,9 +22,7 @@
   .box{width:320px;background:var(--surface);border:1px solid var(--border);border-radius:16px;
     padding:32px 28px;box-shadow:0 8px 28px rgba(60,163,249,.12);}
   .brand{display:flex;align-items:center;gap:10px;margin-bottom:28px;justify-content:center;}
-  .brand-logo{width:32px;height:32px;border-radius:8px;
-    background:linear-gradient(135deg,var(--accent1),var(--accent2));color:#fff;
-    display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;flex-shrink:0;}
+  .brand-logo{height:28px;width:auto;flex-shrink:0;display:block;}
   .brand-text{display:flex;flex-direction:column;line-height:1.25;}
   .brand-text strong{font-size:13px;}
   .brand-text span{font-size:10.5px;color:var(--muted);}
@@ -46,10 +44,10 @@
 <div class="wrap">
   <div class="box">
     <div class="brand">
-      <span class="brand-logo">H</span>
+      <img class="brand-logo" src="assets/hansol-logo.png" alt="Hansol">
       <div class="brand-text">
-        <strong>한솔아이원스 안성사업장</strong>
-        <span>영업팀 손익 현황 관리 시스템</span>
+        <strong>한솔아이원스</strong>
+        <span>ME 사업부 손익 현황 관리 시스템</span>
       </div>
     </div>
     <h1>로그인</h1>
